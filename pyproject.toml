@@ -1,0 +1,16 @@
+[build-system]
+build-backend = "uv_build"
+requires = ["uv_build>=0.9.11,<0.10.0"]
+
+[project]
+authors = [{name = "Ilias Dzhabbarov", email = "iliyas.dzabbarov@gmail.com"}]
+description = "An Expressive Library for Static Typing"
+license = {text = "MIT"}
+name = "metatypes"
+readme = "README.md"
+requires-python = ">=3.14"
+version = "0.1.0"
+
+[project.urls]
+Homepage = "https://github.com/iliyasone/metatypes"
+Issues = "https://github.com/iliyasone/metatypes"
