@@ -1,7 +1,5 @@
 # A Meta-Type System for Python: an Expressive Library for Static Typing
 
-## Abstact
-
 We explore how Python’s current static typing works, why it feels limited compared to TypeScript, and how we might design an *opt-in* Turing-complete meta type system as a library plus type-checker integration.
 
 We start from the observation that Python already has *two* static typing styles layered on top of its dynamic runtime:
