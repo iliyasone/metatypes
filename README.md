@@ -23,6 +23,8 @@ Consider the following proposed meta-types: `Add`, `AnyNat`, `Mul`, `Len`, and `
 
 [`vectors.py`](https://github.com/iliyasone/metatypes/tree/main/examples/vectors.py)
 ```python
+from metatypes import AnyNat, reveal_type
+
 class Vector[Typ, N]:
     """Vector of length N with elements of type Typ."""
 
@@ -31,6 +33,13 @@ def matmul[Typ, N: AnyNat, K: AnyNat, M: AnyNat](
     b: Vector[Vector[Typ, M], K],       # Matrix (K x M)
 ) -> Vector[Vector[Typ, M], N]:         # Matrix (N x M)
     """Matrix multiplication: (N x K) * (K x M) = (N x M)"""
+
+def example():
+    ...
+    mat_a: Vector[Vector[float, 2], 3]  # 3x2
+    mat_b: Vector[Vector[float, 4], 2]  # 2x4
+    mat_c = matmul(mat_a, mat_b)  # (3x2) * (2x4) = (3x4)
+    reveal_type(mat_c)  # E: Vector[Vector[float, 4], 3]
 ```
 
 #### 1.3.2 Intersection Type
