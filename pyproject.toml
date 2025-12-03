@@ -4,13 +4,26 @@ requires = ["uv_build>=0.9.11,<0.10.0"]
 
 [project]
 authors = [{name = "Ilias Dzhabbarov", email = "iliyas.dzabbarov@gmail.com"}]
+dependencies = [
+  "ruff>=0.14.7",
+]
 description = "An Expressive Library for Static Typing"
 license = {text = "MIT"}
 name = "metatypes"
 readme = "README.md"
 requires-python = ">=3.14"
-version = "0.1.0"
+version = "0.1.1"
 
 [project.urls]
 Homepage = "https://github.com/iliyasone/metatypes"
 Issues = "https://github.com/iliyasone/metatypes/issues"
+
+[tool.ruff]
+ignore = [
+  "TCH", # typing checks (TCH001–TCH999)
+  "ANN", # annotation rules
+  "UP", # modernization of typing
+  "F821",
+  "F841",
+  "F842",
+]
