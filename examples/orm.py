@@ -1,5 +1,5 @@
 # type: ignore
-from metatypes import Intersection, Row, Select, Join
+# from metatypes import Intersection, Row, Select, Join
 
 
 class Table: ...
