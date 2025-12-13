@@ -1,5 +1,9 @@
 # A Meta-Type System for Python: an Expressive Library for Static Typing
 
+> 🧑‍🔬 **RQ**: Why does Python’s standard static typing fail to express certain value-dependent typing relationships, and how can a portable meta-typing mechanism address these limitation?
+
+
+
 We explore how Python’s current static typing works, why it feels limited compared to TypeScript, and how we might design an *opt-in* Turing-complete meta type system as a library plus type-checker integration.
 
 We start from the observation that Python already has *two* static typing styles layered on top of its dynamic runtime:
@@ -63,12 +67,12 @@ So, to summarize what we are setting up:
 
 From here, we can continue in any of a few directions: we can sketch the core primitives of the `metatypes` DSL, choose a flagship domain (typed SQL vs. length-indexed containers), or design the shape of the mypy plugin API we rely on.
 
-[1]: https://peps.python.org/pep-0484/?utm_source=chatgpt.com "PEP 484 – Type Hints"
-[2]: https://peps.python.org/pep-0544/?utm_source=chatgpt.com "PEP 544 – Protocols: Structural subtyping (static duck typing)"
-[3]: https://peps.python.org/pep-0681/?utm_source=chatgpt.com "PEP 681 – Data Class Transforms"
-[4]: https://jellezijlstra.github.io/negation-types.html?utm_source=chatgpt.com "Gradual negation types and the Python type system"
-[5]: https://docs.astral.sh/ty/?utm_source=chatgpt.com "ty - Astral Docs"
-[6]: https://arxiv.org/abs/2208.14755?utm_source=chatgpt.com "Python Type Hints are Turing Complete"
-[7]: https://mypy.readthedocs.io/en/stable/extending_mypy.html?utm_source=chatgpt.com "Extending and integrating mypy - mypy 1.18.2 documentation"
-[8]: https://docs.sqlalchemy.org/en/latest/orm/extensions/mypy.html?utm_source=chatgpt.com "Mypy / Pep-484 Support for ORM Mappings"
-[9]: https://dev.to/meseta/factories-abstract-base-classes-and-python-s-new-protocols-structural-subtyping-20bm?utm_source=chatgpt.com "Python's new Protocols (Structural subtyping), Abstract ..."
+[1]: https://peps.python.org/pep-0484/?utm_source=github.com/iliyasone "PEP 484 – Type Hints"
+[2]: https://peps.python.org/pep-0544/?utm_source=github.com/iliyasone "PEP 544 – Protocols: Structural subtyping (static duck typing)"
+[3]: https://peps.python.org/pep-0681/?utm_source=github.com/iliyasone "PEP 681 – Data Class Transforms"
+[4]: https://jellezijlstra.github.io/negation-types.html?utm_source=github.com/iliyasone "Gradual negation types and the Python type system"
+[5]: https://docs.astral.sh/ty/?utm_source=github.com/iliyasone "ty - Astral Docs"
+[6]: https://arxiv.org/abs/2208.14755?utm_source=github.com/iliyasone "Python Type Hints are Turing Complete"
+[7]: https://mypy.readthedocs.io/en/stable/extending_mypy.html?utm_source=github.com/iliyasone "Extending and integrating mypy - mypy 1.18.2 documentation"
+[8]: https://docs.sqlalchemy.org/en/latest/orm/extensions/mypy.html?utm_source=github.com/iliyasone "Mypy / Pep-484 Support for ORM Mappings"
+[9]: https://dev.to/meseta/factories-abstract-base-classes-and-python-s-new-protocols-structural-subtyping-20bm?utm_source=github.com/iliyasone "Python's new Protocols (Structural subtyping), Abstract ..."
