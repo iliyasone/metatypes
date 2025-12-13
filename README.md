@@ -1,7 +1,7 @@
 # A Meta-Type System for Python: An Expressive Library for Static Typing
 
 > 🛠️ **Note:** This package is a work in progress. If you'd like to contribute or discuss ideas, feel free to reach out on Telegram [@iliyasone](https://t.me/iliyasone) or by email: [iliyas.dzabbarov@gmail.com](mailto:iliyas.dzabbarov@gmail.com).  
-> 🚧 For now, this repository serves as the homepage for my thesis. Later it will become a standalone library and a mypy plugin.
+> 🚧 This repository serves as the homepage for my thesis. Later it will become a standalone library and a mypy plugin.
 
 #### Abstarct Aiming
 Python's static type system is formally Turing complete, yet its practical expressiveness remains limited. For more than a decade, the Python community has debated the addition of basic constructs like the Intersection type, but these have yet to be accepted. Most modern type checkers, such as Pyright and Ty, do not offer any mechanism for extensibility at the meta-type level. Their position is that libraries should not rely on plugins but should use the standard PEP approach. I can agree with this view to some extent. Mypy does provide a clear way to write plugins, but each plugin is specific to a particular library. This leaves many advanced patterns — such as well-typed SQL in ORMs — either impossible or forced into tool-specific plugins or code generation tools. In this thesis, I want to introduce and develop a meta-type system for Python, packaged as an experimental library, which enables the definition and evaluation of advanced type-level constructs through a unified interface. My aim is not to propose a PEP or to challenge the core language philosophy, but to demonstrate a practical approach to expressive type checking that may be used by community-driven libraries and static analysis tools to declare typing constructs previously unachievable. The library is designed to be fully compatible with the optional, tool-enforced nature of type hints. I believe that a meta-type layer can substantially increase the power and utility of static type checking in Python, without requiring changes to the language itself. These types will be checked by a custom mypy plugin written by me, and I will be seeking recognition by Ty and Pyright.
@@ -172,7 +172,7 @@ projected.age;
 Python can implement the runtime behavior trivially, but the shared typing language has no way to name the resulting type as a function of the input values. In particular, it cannot state the claim "the result has exactly these keys" when those keys are supplied as a runtime list, even though that claim is well-defined at execution time. ([Python Enhancement Proposals (PEPs)][1])
 
 ```py
-# Python: runtime projection is easy, but typing usually collapses to imprecision.
+# Python: runtime projection is easy, but typing is impossible.
 
 from typing import Any
 
