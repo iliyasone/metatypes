@@ -1,4 +1,3 @@
-# type: ignore
 """
 Draft surface syntax for the `metatypes` DSL.
 
@@ -11,12 +10,12 @@ At runtime these are no-ops; the plugin is the only thing that gives
 them semantics.
 """
 
-type Equals[A, B] = ...
+type Equals[A, B] = ...  # type: ignore[misc]
 """Proposition that A and B are the same type.
 >>> A ≡ B
 """
 
-type AnyNat = ...
+type AnyNat = ...  # type: ignore[misc]
 """Type-level natural number (dimension index).
 
 This is a *kind marker* used only at the meta level.
@@ -24,7 +23,7 @@ The plugin treats AnyNat as “something that behaves like a non-negative int”
 for the purpose of Add / Mul / Len / etc.
 """
 
-type Add[N: AnyNat, M: AnyNat] = ...
+type Add[N: AnyNat, M: AnyNat] = ...  # type: ignore[misc]
 """Type-level addition on dimension-like integers.
 
 Intended laws (enforced by static checkers):
@@ -35,10 +34,10 @@ Intended laws (enforced by static checkers):
 >>> Add[Add[A, B], C] ≡ Add[A, Add[B, C]]
 """
 
-type Mul[N: AnyNat, M: AnyNat] = ...
+type Mul[N: AnyNat, M: AnyNat] = ...  # type: ignore[misc]
 """Type-level multiplication on dimension-like integers"""
 
-type Len[X] = ...
+type Len[X] = ...  # type: ignore[misc]
 """
 Type-level length operator.
 
@@ -65,18 +64,18 @@ return AnyNat
 
 
 # Core combinators
-type Intersection[A, B] = ...
+type Intersection[A, B] = ...  # type: ignore[misc]
 """A & B: values that satisfy (subclass) both A and B."""
 
-type Not[T] = ...
+type Not[T] = ...  # type: ignore[misc]
 """Negation type: ~T"""
 
 
-type If[Cond, Then, Else] = ...
+type If[Cond, Then, Else] = ...  # type: ignore[misc]
 """Type-level conditional: If[Cond, Then, Else]."""
 
 
-type GetAttr[T, Name] = ...
+type GetAttr[T, Name] = ...  # type: ignore[misc]
 """
 Type of attribute `Name` on values of type `T`.
 

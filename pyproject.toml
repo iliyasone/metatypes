@@ -5,25 +5,47 @@ requires = ["uv_build>=0.9.11,<0.10.0"]
 [project]
 authors = [{name = "Ilias Dzhabbarov", email = "iliyas.dzabbarov@gmail.com"}]
 dependencies = [
-  "ruff>=0.14.7",
+  "typemap @ git+https://github.com/iliyasone/python-typemap.git@develop",
+  "pydantic>=2.13.4",
 ]
 description = "An Expressive Library for Static Typing"
 license = {text = "MIT"}
 name = "metatypes"
 readme = "README.md"
 requires-python = ">=3.14"
-version = "0.1.3"
+version = "0.2"
 
 [project.urls]
 Homepage = "https://github.com/iliyasone/metatypes"
 Issues = "https://github.com/iliyasone/metatypes/issues"
 
-[tool.ruff]
-ignore = [
-  "TCH", # typing checks (TCH001–TCH999)
-  "ANN", # annotation rules
-  "UP", # modernization of typing
-  "F821",
-  "F841",
-  "F842",
+[tool.setuptools.packages.find]
+include = [
+  "metatypes*",
+  "pydantic_extension*",
 ]
+
+where = ["src"]
+[dependency-groups]
+lint = [
+  "mypy @ git+https://github.com/msullivan/mypy-typemap.git",
+  "ruff>=0.14.7",
+]
+
+dev = [
+  "ipykernel>=7.2.0",
+]
+test = [
+  "pytest>=9.0.3",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Research examples deliberately contain unused locals introduced solely
+# to feed `reveal_type` to mypy. They are documentation, not runtime code.
+"src/metatypes/research_examples/*" = ["F841"]
+
+[tool.pytest.ini_options]
+# pytest looks for functions starting with `test_`. Our paired test
+# convention also has `mypy_test_*` functions which are intentionally
+# *not* collected by pytest — only checked by mypy.
+python_functions = ["test_*"]
