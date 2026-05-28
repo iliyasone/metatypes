@@ -1,39 +1,51 @@
 ## 3. Design and Methodology
 
-### 3.1 System design.
+### 3.1 System design
 
-Since the PEP 827 type manipulation was published, the main thesis work was shifted from creating and testing own DSL to evaluating published PEP, trying to run some runtime checks, search it weaknesses, bugs, suggest fixes, and get it work not on toy examples, rather on real production libraries.
+When PEP 827 (Type Manipulation) was published, the focus of this thesis shifted. The original goal of designing and testing an in-house meta-typing DSL gave way to evaluating the published proposal directly: exercising it through runtime checks, surfacing weaknesses and bugs, suggesting fixes, and verifying that the DSL holds up not only on toy examples, but on real production libraries.
 
-The authors of a PEP 827 provided 2 ways to play with their suggested DSL.
+The authors of PEP 827 provide two playgrounds for the proposed DSL. The first is the **typemap** runtime library, which operates on annotations as ordinary Python objects. The second, discussed in Section 3.2, is the **mypy-typemap plugin**, which evaluates the same combinators during static type-checking.
 
-First is Typemap runtime repo (link). This is pure runtime library. It is working on the annotations, which in Python exist in runtime.
-
-You may think it is not very useful to have type evaluator dynamically, when the whole goal of the PEP 827, as well as a Metatypes type system research, is to give users and programmers static analyze tools. You are mostly right. In Python type annotations are first class citizens, and, real classes*. They can be dynamically investigated, updated, dispatched. The classic example for this is dependency injection in FastAPI
-
-… well-known dependency injection…
-
-or dynamicly dispatched overloads:
+One might expect a runtime type evaluator to offer little value, given that the entire motivation for PEP 827 — and for this thesis — is to provide static analysis tools. That intuition is largely correct, yet it overlooks a property of Python that is central to the language: type annotations are first-class objects at runtime. They can be inspected, mutated, dispatched on, and used to generate further classes dynamically. Two standard examples illustrate this. The first is dependency injection in FastAPI, where the annotated parameter type drives a lookup at call time:
 
 ```python
-type Json = dict[str, Json] | list[Json] | str | bool | float | int | None
+from fastapi import Depends, FastAPI
 
-@magic_dispatch.based_on_argument_type
-def parseJson(node: Node):
+app = FastAPI()
+
+def get_db():
     ...
-@magic_dispatch.based_on_argument_type    
-def enter_leaft(node: Leaf):
+
+@app.get("/users")
+def list_users(db = Depends(get_db)) -> list[User]:
     ...
-    
-@magic_dispatch.based_on_argument_type
-def enter_number(node: Number)
-	...
-# not the great example to be honest
 ```
 
-Lets go deeper into the PEP 827 example. Using suggested primitives, it is allowing to manipulate types to create a static API of create, get and update of any Pydantic model.
+The second is single-dispatch over a recursive type alias, expressed with `functools.singledispatch` from the standard library:
 
+```python
+from functools import singledispatch
 
-The famous [FastAPI tutorial](https://fastapi.tiangolo.com/tutorial/sql-databases/#heroupdate-the-data-model-to-update-a-hero), demonstrates how you need 3 classes for basic Create Get and Update API operations. Pydantic and types are essential for FastAPI as it is allows many tools (automatically generate documentation, validate request and response body, generate errors etc.)
+type Json = dict[str, Json] | list[Json] | str | bool | float | int | None
+
+@singledispatch
+def render(node: Json) -> str:
+    return repr(node)
+
+@render.register
+def _(node: dict) -> str:
+    return "{ " + ", ".join(f"{k}: {render(v)}" for k, v in node.items()) + " }"
+
+@render.register
+def _(node: list) -> str:
+    return "[" + ", ".join(render(v) for v in node) + "]"
+```
+
+The recursive alias `type Json = dict[str, Json] | list[Json] | str | bool | float | int | None` deserves its own remark: a complete, type-checkable specification of JSON values in a single line is a feature one usually associates with Haskell or OCaml, not with a dynamically typed scripting language. Modern Python typing is closer to that lineage than its reputation suggests.
+
+— In the author's view, this single-line recursive alias is one of the most striking demonstrations of how far Python's type system has evolved; it earns its place in any introduction to the topic.
+
+A more substantial example follows from the [FastAPI SQL-databases tutorial](https://fastapi.tiangolo.com/tutorial/sql-databases/#heroupdate-the-data-model-to-update-a-hero), which shows that three near-identical classes are required for the basic Create, Read, and Update operations of a Pydantic-backed CRUD API:
 
 ```python
 class HeroBase(SQLModel):
@@ -56,87 +68,103 @@ class HeroUpdate(HeroBase):
     secret_name: str | None = None
 ```
 
-I would argue this is not Pythonic. The Get Create and Update are just boilplate operations over class. It is whole other discussion, should they be one class, uniting the create-update and read logic under one name space. I would argue yes, some may argue no, as the per-class operation probably would more easy would extended, if tommorrow HeroUpdate would require some very complex verification before applying new secret_name. Anyway, this is not a point of today discussion. The point is that this classes absolutelty can be generated in Python today during runtime
+<!-- IEEE 2-col page 1 ends here (approx, assuming abstract + introduction of ~250 words precede this point in the eventual paper assembly). -->
 
-```python
-class Hero:
-    id: int | None = Field(default=None, primary_key=True)
-
-    name: str = Field(index=True)
-    age: int | None = Field(default=None, index=True)
-
-    secret_name: str = Field(hidden=True)
-
-```
-
-For example, something like this is plausable in Python today, and was a long time:
+This thesis argues that the pattern is not Pythonic. Create, Read, and Update are boilerplate projections of a single underlying class; whether they should live under one namespace is a separate design discussion, with reasonable arguments on both sides. The point relevant here is more narrow: these classes can already be generated in Python at runtime, and have been for some time, by a function of roughly the following shape:
 
 ```python
 HeroPublic = public_model(Hero)
 HeroUpdate = update_model(Hero)
 HeroCreate = create_model(Hero)
 ```
-The pros of such approach:
-:green-flag: all pros of a typed schema, dynamically generated docs, less boilplate code
 
-The cons of such approach:
-:red-critical: broken static analysis. Language server is not supports your code. You may made a typo and you never know until the code is crushing in production.
+Such an approach has clear advantages and clear costs.
 
-The point is it would be great to take from both worlds?
+Advantages:
 
+1) all benefits of a typed schema, such as dynamically generated API documentation;
+2) substantially less boilerplate code.
 
-### 3.2 Assumptions.
-The beautify of a Type Manipulation primitives is that they define roles and action. This is almost like a convention.
+Disadvantages:
 
-And we are very slowly going to the Second part of a provided playground of PEP 827 proposal: mypy plugin. This is the piece which is merging the dynamic nature of Python runtime creation with making it statically checkable. 
+1) broken static analysis: language servers no longer understand the generated classes;
+2) typos and shape mismatches surface only at runtime, often in production.
 
-mypy pluging has nothing to do with runtime. It is just a tool for linting and static checks. The mypy has a long story of a plugins, which would support some advanced typing for some libraries. And now the PEP 827 plugin is a last plugin which mypy would need (probably). All other probably can be express into the PEP 827 primitives.
-
-So we got exactly second side which was missing: static analysis.
-
-While mypy is not the fastest plugin, also it is not providing the language server support (which is also a big thing for modern developers), it is not only good proof of a concept, but actually can be used within real project which may benefit. 
-
-Let me clear this out:
-- typemap runtime provide all tools for evaluating types in runtime
-- mypy plugin is a working tool for a static analysis
-- PEP 827 does not require syntax update. 
-
-All of this 3 allow us actually to use the typemap types even without the PEP 827 acceptance in language. 
-Any library or project can use this DSL right now and plugin, and hence increase chances of accepting it into the Python 3.16. Sure, the users without mypy plagin will not get advanced type system checks, but within it they will! And runtime evaluator is just a dependency.
-
-Those combo is allowing advanced type manipulation starting from today.
-
-### 3.3 Problems and simplifications.
+The remainder of this chapter shows how the two PEP 827 playgrounds, taken together, allow both columns to be enjoyed.
 
 
-#### 3.3.1 Duality of Python Annotations: Static vs Runtime
-
-The main problem which I was running to is a **actual difference** between the static annotations and runtime annotations. This is a moment when Python haters can start clapping.
-
-The `typing.TYPE_CHECKING` is a constant which is `False` in runtime, but `True` during static analysis.
-It was introduced to the language by the BDFL at 2016 
-https://github.com/python/typing/issues/230
-
-Firstly it was suppose to handle simple issues:
-- lazy imports for the heavy libraries
-- annotations of self or not declared classes
-
-Example
-
-
-
-```python
-type Json = dict[str, Json] | list[Json] | str | bool | float | int | None
-# I really fucking love this example and wanna put it somewhere on top or something, at the begging as a quick demo with maybe some code example with pattern matching. Maybe comparing 2 languages.
+```mermaid
+flowchart TB
+    subgraph PT["Python static type system"]
+        S["Structural / Protocol<br/>(PEP 544)"]
+        T["TypedDict<br/>(PEP 589)"]
+        N["Nominal<br/>(PEP 484)"]
+    end
+    subgraph M["PEP 827 meta-level"]
+        NP["NewProtocol"]
+        NTD["NewTypedDict"]
+        NPB["NewProtocolWithBases<br/>proposed, not implemented"]
+    end
+    S -.lifts to.-> NP
+    T -.lifts to.-> NTD
+    N -.lifts to.-> NPB
+    style NPB stroke-dasharray: 4 4
 ```
 
-... something else there?????????? About the actual usefullness of the typing.TYPE_CHECKING
 
-#### 3.3.2 TypeAliases Are Not Runtime Classes
 
-So, lets focus on the `Create[Hero]`
+### 3.2 Assumptions
 
-It is evaluates to:
+The strength of the PEP 827 primitives is that they describe roles and actions: each combinator names what it does, and the combinators compose. This is closer to a convention than to a syntactic extension.
+
+The second playground of PEP 827 is the **mypy-typemap plugin**, the piece that bridges Python's dynamic runtime with static checkability. The plugin has nothing to do with runtime; it is a tool for linting and static analysis only. Mypy has a long history of plugins that teach the checker about advanced patterns in specific libraries. The PEP 827 plugin can be viewed as the *last* such plugin mypy needs, in the sense that most other plugin behaviours can be reduced to PEP 827 combinators.
+
+The plugin therefore restores the missing side: static analysis.
+
+While mypy is not the fastest checker and does not currently provide language-server support — both of which matter to modern developers — it serves as a credible proof of concept and as a tool already usable in real projects.
+
+The relevant components can be stated compactly:
+
+1) the typemap runtime provides the tools for evaluating types at runtime;
+2) the mypy-typemap plugin provides the corresponding static evaluator;
+3) PEP 827 requires no syntactic change to the Python language.
+
+These three together let projects adopt the typemap DSL today, without waiting for PEP 827 to be accepted into the language. A developer who installs only the runtime obtains dynamic evaluation; a developer who additionally installs the mypy plugin obtains the full static experience. The runtime evaluator is an ordinary dependency, and the static checker is an ordinary developer tool.
+
+— The most underappreciated property of this design, in the author's view, is that it does not ask Python to change; it composes with the language as it already exists, so individual libraries may begin benefiting without waiting on a PEP cycle.
+
+This combination unlocks advanced type manipulation starting today.
+
+### 3.3 Problems and simplifications
+
+#### 3.3.1 Duality of Python annotations: static versus runtime
+
+The central difficulty encountered while exercising the typemap DSL is the **genuine semantic gap** between annotations as static artefacts and annotations as runtime values. This is the point at which critics of Python typing tend to feel vindicated.
+
+The constant `typing.TYPE_CHECKING` evaluates to `False` at runtime and to `True` during static analysis. It was introduced in 2016 (see [python/typing issue #230](https://github.com/python/typing/issues/230)) to address two narrow problems:
+
+1) lazy imports of heavy libraries that are referenced only in annotations;
+2) forward references to self and to classes not yet declared at the point of use.
+
+Over time, however, `TYPE_CHECKING` has acquired a third and far more powerful use: *declaring entire classes that exist only for the type-checker*. A class defined under `if TYPE_CHECKING:` is visible to mypy and to other static tools, yet absent from the module globals at runtime. The test suite of this thesis exercises that case directly (see `tests/test_pydantic_extension.py`, the `HiddenAtRuntime` block):
+
+```python
+if TYPE_CHECKING:
+    class HiddenAtRuntime(BaseModel):
+        secret: str
+
+def mypy_test_type_checking_only_class_visible_to_mypy() -> None:
+    if TYPE_CHECKING:
+        h = HiddenAtRuntime(secret="x")
+        assert_type(h.model_dump()["secret"], str)
+```
+
+The static side type-checks cleanly; the runtime side cannot even resolve the name `HiddenAtRuntime`. This asymmetry is exactly what the PEP 827 plugin must reason about: any meta-type that takes such a class as its argument has a well-defined static meaning and no runtime counterpart. The corresponding runtime test is marked `xfail(strict=True)` precisely to document this limit and to keep it visible in the pytest report.
+
+#### 3.3.2 TypeAliases are not runtime classes
+
+The expression `Create[Hero]` evaluates, under the typemap runtime, to a structure of the form
+
 ```python
 class Create[__main__.Hero]:
     name: str
@@ -144,35 +172,30 @@ class Create[__main__.Hero]:
     secret_name: str
 ```
 
-The problem is that this thing is not a runtime class, it is a TypeAlias
-So you can not use `Create[Hero]()` to actually construct an object.
-but it is not a big problem, as once you have a Create[Hero] TypeAlias, It would be trial how to build a real class from it. Pydantic already have an interface for building models into the runtime. The implementation is in progress (one more thing which we can do at this Thesis)
+The subtle point is that the result is a `TypeAlias`, not a runtime class. Therefore `Create[Hero]()` cannot be used directly to construct an instance. This is not a serious obstacle, because Pydantic already provides a runtime API (`pydantic.create_model`) for synthesising classes from a field specification. Once a `Create[Hero]` alias is in hand, lifting it into an instantiable class is mechanical:
 
 ```python
 def create_model[T](model: type[T]) -> type[T]:
     ...
-    return pydantic.create_model()
+    return pydantic.create_model(...)
 ```
 
-#### 3.3.3 Triumvirate of Python Type Systems
+The implementation is in progress and remains one of the open tasks of this thesis.
 
-Lets break down what I mean.
+#### 3.3.3 The triumvirate of Python type systems
 
-First, is a duck-typing, also known the protocol typing. This is "if something is behave like a duck it is a duck"-ish thing. The oldest thing, and probably the most "natural" for python (I thin we don't fucking need this sentence)
+Python is best understood as carrying three partially overlapping type systems.
+
+First, **structural typing**, also known as duck typing or protocol typing. The principle is captured by the phrase *"if it behaves like a duck, it is a duck"*; structural typing arguably predates the static layer and is the most natural style for the language.
 
 ```python
-
 class Duck(Protocol):
     name: str
-    def migrate(self) -> None:
-        """Migrate to the South"""
-        ...
+    def migrate(self) -> None: ...
 
-def prepare_for_winter(duck: Duck):
+def prepare_for_winter(duck: Duck) -> None:
     print("Duck %s moving to the South" % duck.name)
     duck.migrate()
-
-### Real world
 
 class Database:
     user: str
@@ -180,46 +203,224 @@ class Database:
     ip: str
     port: str
     name: str
-    
+
     def migrate(self) -> None:
         ...
 
-prepare_for_winter(Database()) # no static warning!
+prepare_for_winter(Database())   # accepted; no static warning
 ```
 
-Some may argue that it is not an error, as it is explicitly accepting anything which is a compatable like. Again, it is not a point to the today discussion to argue what is better explicit or implicit interfaces. But I just think it is not very pythonic. It may be in some cases (I am not very belive in this lol after I think 3 sec more)
+One may reasonably argue that this is not an error: `prepare_for_winter` declared a structural interface and the `Database` class happens to satisfy it. Whether explicit or implicit interfaces are preferable is a separate discussion. The PEP 827 combinator that lifts this layer to the meta level is `NewProtocol`.
 
-Type manipulation feature - NewProtocol
+Second, **TypedDict-based subtyping**. The relation `{"name": str, "age": int} <: {"name": str}` holds, while `{"name": str}` is *not* a subtype of an arbitrary `dict`. The PEP 827 combinator for this layer is `NewTypedDict`.
 
-2. TypedDict forms - subtyping
+Third, **nominal typing**, by class hierarchy. PEP 827 currently provides no general meta combinator for this layer. The proposal sketches one, `NewProtocolWithBases[Bases: tuple[type], *Ms: Member]`, but no implementation is yet available. A direct consequence is that `Create[Hero]` is not statically a Pydantic model: it is structurally compatible with one, yet the nominal relationship cannot yet be expressed at the meta level.
 
-Simple enough
-`{"name": str, "age": int}` is a subtype of a `{"name": str }`... or no? And they are not suptypes of a Dict generally speaking.
+\input{figures/type-system-lift.tex}
 
-Type manipulation feature - NewTypedDict - 
+*Fig. 2. The three coexisting type systems in Python and their PEP 827 counterparts at the meta level. The dashed node marks the meta combinator that the proposal sketches but does not yet implement.*
 
-3. Nominal typing... 
-
-No type manipulation feature..
-
-Suggested like this `NewProtocolWithBases[Bases: tuple[type], *Ms: Member]` but not implemented.
-
-Interesting consequence is that the `Create[Hero]` would not be a Pydantic models! At least on the level of types. But the protocol does not restricts the parent base classes.
-(I don't really have a point there. But I really like the idea that the python have 3 type system, almost separate, and thats why we have a lot of cursed things today)
-Anyway, it is good to start gradually. TypeScript advanced type manipulation was not also build in one update.
-
+— Working with these three layers in parallel is, in the author's experience, the single largest source of pathological corner cases in Python typing; gradual standardisation, one combinator at a time, is the realistic path forward. TypeScript's advanced type manipulation did not arrive in a single release either.
 
 ## 4. Implementation and Results
 
-The core example are working now - extension for the pydantic.BaseModel.model_dump() types.
+### 4.1 Implementation
 
-Current progress is that it is actually interference the type of the resulting TypeDict. 
+The implementation began with typing the result of `pydantic.BaseModel.model_dump()`. The current state of the work is that the resulting `TypedDict` is inferred correctly for the basic, the inherited, and the empty-model cases (see `tests/test_pydantic_extension.py`, sections labelled *leaf dump fields*, *inherited fields in dump*, *empty model has no keys*, and *pydantic internals filtered*).
 
-> side note about why exactly model_dump(), and not for example model_validate()
+The choice of `model_dump()` rather than, for instance, `model_validate()`, deserves a short justification. The essence of Pydantic is that `model_validate` is a *type guard*: it takes an untyped input and produces either a typed object or a validation error. Adding a precise input type to `model_validate` therefore works against the very property that makes the function useful. By contrast, `model_dump()` flows in the opposite direction, from a typed object to an untyped dictionary, and is exactly the case where a precise output type recovers information that would otherwise be lost.
 
-The user.model_validate(object) is working as a kinda type-guard. The essence of a Pydantic is that you have something untyped and after some ✨model_validate✨ you have the typed object (or error is raising). 
-So trying to type argument of a model_valudate seems like a violation of a Pydantic 
+A counter-argument is that typing the result of `model_dump()` is not useful, since a dump is most often serialised to storage. This thesis disagrees. The most compelling use case is *passing a dump as keyword arguments to a downstream function*:
 
-Some may argue, that it is not making much sense to validate the model_dump dictionaries, which is a very popular usecase is dumping to the some storage. I would disagee!
+```python
+def write_with_extra(*, name: str, age: int, extra: str) -> None: ...
 
-Very useful example would be to actually unpack the model_dump() (maybe excluding some fields) and putting them as a kw args to another function! (FUCK! WHY I DID NOT COME UP TO THIS EXAMPLE EARLIER??? WE DEFINETLY NEED TO IMPLEMENT THIS!)
+u = User(name="i3s", age=22)
+write_with_extra(**u.model_dump())   # rejected; would be impossible without PEP 827
+```
+
+The fixtures `User`, `Admin`, and `Empty` used throughout the test suite are deliberately minimal:
+
+```python
+from pydantic_extension import BaseModel
+
+class User(BaseModel):
+    name: str
+    age: int
+
+class Admin(User):
+    role: str
+
+class Empty(BaseModel):
+    pass
+```
+
+The signature definition itself is short:
+
+```python
+type ModelDump[T] = typing.NewTypedDict[
+    *[
+        typing.Member[field.name, field.type]
+        for field in typing.Iter[typing.Attrs[T]]
+        if typing.IsAssignable[field.definer, _BaseModel]
+        and not typing.IsEquivalent[field.definer, _BaseModel]
+        and not typing.IsEquivalent[
+            typing.Slice[field.name, Literal[0], Literal[2]], Literal["__"]
+        ]
+    ]
+]
+```
+
+Three concrete issues surfaced while exercising this definition against the typemap runtime:
+
+1) the runtime entry point `eval_call_with_types` carried a broken type-hint signature; this was fixed by [PR #117](https://github.com/vercel/python-typemap/pull/117), which has since been merged into `vercel/python-typemap`;
+2) `Attrs[T]` evaluated the methods of a class in addition to its attributes, which is inconsistent with the documented behaviour and may cause spurious failures when methods carry `if TYPE_CHECKING:`-only annotations; this is tracked in open [PR #122](https://github.com/vercel/python-typemap/pull/122);
+3) the `Self` type is not substituted into the bound class during runtime evaluation, which prevents `eval_call_with_types(User.model_dump, User)` from succeeding; this is tracked in [Issue #123](https://github.com/vercel/python-typemap/issues/123) and is currently under investigation.
+
+— In the author's experience working through these three issues, the `Self`-substitution gap proved the most consequential in practice; it is what currently forces the test suite to address `ModelDump[User]` as a *type alias* rather than as the return type of the bound method `User.model_dump`.
+
+### 4.2 Structure of `ModelDump[T]`
+
+`ModelDump[T]` walks the attributes of `T` and, for each attribute `field`, emits a `Member[field.name, field.type]` only when three conditions hold:
+
+1) the field is defined on `pydantic.BaseModel` or on a subclass of it — that is, `IsAssignable[field.definer, _BaseModel]`, which on the type level is the equivalent of `issubclass` on the value level;
+2) the field is *not* defined directly on `pydantic.BaseModel` itself, which removes the framework's internal fields such as `model_config`;
+3) the field name does not begin with two underscores, which removes dunder attributes.
+
+```python
+typing.NewTypedDict[
+    *[
+        typing.Member[field.name, field.type]
+        for field in typing.Iter[typing.Attrs[T]]
+        if typing.IsAssignable[field.definer, _BaseModel]
+        and not typing.IsEquivalent[field.definer, _BaseModel]
+        and not typing.IsEquivalent[
+            typing.Slice[field.name, Literal[0], Literal[2]], Literal["__"]
+        ]
+    ]
+]
+```
+
+The condition on `field.definer` is the load-bearing piece, because in Python a "field of a class" is genuinely a field of *some* class along the MRO, not of the leaf class as a whole. The following minimal example makes the point:
+
+```python
+class A:
+    bad_class_var_const = 1
+
+class B(A):
+    pass
+
+B.bad_class_var_const += 1
+A.bad_class_var_const   # 1 or 2?
+```
+
+After the in-place addition, `A.bad_class_var_const` is still `1`, while `B.bad_class_var_const` is `2`. The lookup `B.bad_class_var_const` on the right-hand side returned `A`'s class variable; the increment produced a new integer; the assignment installed the result on `B` rather than on `A`. The class dictionaries make the effect visible directly:
+
+```python
+>>> A.__dict__
+mappingproxy({'__module__': '__main__',
+              '__firstlineno__': 1,
+              'bad_class_var_const': 1,
+              '__static_attributes__': (),
+              '__dict__': <attribute '__dict__' of 'A' objects>,
+              '__weakref__': <attribute '__weakref__' of 'A' objects>,
+              '__doc__': None})
+>>> B.__dict__
+mappingproxy({'__module__': '__main__',
+              '__firstlineno__': 11,
+              '__static_attributes__': (),
+              '__doc__': None,
+              'bad_class_var_const': 2})
+```
+
+```mermaid
+flowchart TB
+    inst["instance attribute lookup<br/>obj.name"]
+    inst --> mro["walk type(obj).__mro__"]
+    mro --> chk["for each class C in the MRO,<br/>check 'name' in C.__dict__"]
+    chk --> hit["first hit returns<br/>(C, value)"]
+    hit --> attrs["Attrs[T] therefore walks the MRO,<br/>not T.__dict__ alone"]
+```
+
+*Fig. 3. Attribute resolution on instances and the reason `Attrs[T]` is defined to walk the MRO rather than only the leaf class. Each attribute is owned by exactly one class along the chain — its `definer` — and the filters in `ModelDump[T]` are predicated on that ownership.*
+
+— The asymmetry between class-level and instance-level attribute resolution is, in the author's view, the single most underappreciated detail in Python's data model; it is exactly the reason `Attrs[T]` must inspect every base class along the MRO rather than the leaf's `__dict__` alone.
+
+The forward-looking signature of `model_dump` accepts a substantial set of keyword arguments — `mode='json'`, `include=`, `exclude=`, `by_alias=`, `exclude_unset=`, `exclude_defaults=`, `exclude_none=`, `exclude_computed_fields=`, `round_trip=`, and the opaque kwargs `context=`, `fallback=`, `warnings=`, `serialize_as_any=`, `polymorphic_serialization=`. None of these currently narrows the resulting `TypedDict`. The file `tests/test_model_dump_kwargs.py` serves as the *static specification* for each of them: every kwarg with a well-defined static meaning is captured as an `mypy_test_<kwarg>` paired with an `xfail(strict=True)` runtime test, so that the moment the static layer learns to narrow that kwarg the corresponding `# type: ignore[assert-type]` becomes unused and `--warn-unused-ignores` flags it. The opaque kwargs (`context=`, `fallback=`, etc.) are marked `pytest.mark.skip` with an explanation, because they cannot in principle be statically reflected: their effect depends on runtime values supplied by user code.
+
+### 4.3 Testing setup
+
+#### 4.3.1 Duality of the tests
+
+Because annotations have two distinct meanings in Python, the test suite carries two kinds of tests next to each other:
+
+1) **runtime evaluation tests.** These are the source of truth for the typemap playground; annotations in Python are not erased at runtime and are used for dynamic reasoning, which makes their runtime semantics directly observable.
+2) **static mypy tests.** These describe how most users will interact with the types, since most tools and libraries do not inspect annotations dynamically; developers see warnings and type errors in their editor and in CI rather than in `pytest` output.
+
+The author chose to keep both kinds in ordinary function definitions, with the mypy variant wrapped in `if TYPE_CHECKING:` to make the static-only nature explicit. A side-by-side example follows:
+
+```python
+def mypy_test_leaf_dump_fields() -> None:
+    if TYPE_CHECKING:
+        u = User(name="i3s", age=22)
+        dump = u.model_dump()
+        assert_type(dump["name"], str)
+        assert_type(dump["age"], int)
+
+
+def test_leaf_dump_fields() -> None:
+    dump_type = eval_typing(ModelDump[User])
+    assert dump_type.__annotations__["name"] is str
+    assert dump_type.__annotations__["age"] is int
+```
+
+The runtime test uses `ModelDump[User]` directly via `eval_typing` rather than `eval_call_with_types(User.model_dump, User)`, because the latter path is the one currently affected by Issue #123 (`Self` substitution).
+
+The function `mypy_test_leaf_dump_fields` has no runtime effect. When mypy enters its body it checks that the inferred type matches each `assert_type`; a mismatch raises a static error during the lint stage. The function `test_leaf_dump_fields` is an ordinary pytest test that evaluates the same definition at runtime and confirms that the resulting annotations agree.
+
+The convention has three pieces:
+
+1) static and runtime tests sit next to each other, one pair per feature;
+2) mypy-test bodies are wrapped in `if TYPE_CHECKING:` so the static-only nature is explicit at the call site;
+3) functions whose names do not begin with `test_` are not collected by pytest, by convention.
+
+The benefit of this arrangement is that a single command runs mypy and pytest over the whole codebase, so that both layers stay in agreement on every file.
+
+#### 4.3.2 Negative tests
+
+Expected failures are simple in pytest; with the mypy half of the suite they require slightly more care. The question is how to mark that something does *not* type-check, how to detect when the negative assertion silently flips to a positive (which would be welcome but must not pass unnoticed), and how to enforce all of this with a tool that only emits lint diagnostics.
+
+The configuration relies on two mypy flags:
+
+```bash
+uv run mypy --warn-unused-ignores --enable-error-code ignore-without-code .
+```
+
+The flag `--warn-unused-ignores` makes mypy report an error whenever a `# type: ignore` comment is no longer needed. The flag `--enable-error-code ignore-without-code` forbids bare `# type: ignore`, so that every ignored line must carry a specific error code.
+
+Together, the two flags turn `# type: ignore[<code>]` into a *negative assertion*: the test asserts that mypy emits exactly `<code>` on this line. When the assertion holds, the ignore consumes the error and the run succeeds. When the assertion silently flips — that is, when mypy no longer emits `<code>` — the ignore becomes unused and the run fails, forcing the maintainer to remove the mark and acknowledge that the previously failing case now passes.
+
+```mermaid
+flowchart LR
+    src["source line:<br/>x = f()  # type: ignore[arg-type]"]
+    src --> mypy["uv run mypy<br/>--warn-unused-ignores<br/>--enable-error-code ignore-without-code"]
+    mypy --> q{"does mypy still emit<br/>error code 'arg-type'<br/>on this line?"}
+    q -- yes --> ok["ignore consumed;<br/>negative assertion holds;<br/>exit 0"]
+    q -- no --> fail["ignore unused;<br/>negative assertion violated;<br/>exit non-zero"]
+```
+
+*Fig. 4. The negative-test workflow. Each `# type: ignore[<code>]` line acts as an assertion that mypy still emits `<code>` on that line; `--warn-unused-ignores` flips the assertion to a failure the moment the underlying error disappears.*
+
+#### 4.3.3 Comparison with alternative testing setups
+
+Because the project aims to expose issues that arise when established Python libraries are used through PEP 827, the unit of investigation must remain as close as possible to ordinary library code. Three families of approach were considered for testing the static behaviour of such code:
+
+1) **subprocess-driven testing**, in which a pytest fixture launches `mypy` as an external process against a temporary file or a string snippet, parses its standard output, and asserts on the diagnostics;
+2) **API-driven testing**, in which the same work is done in-process via `mypy.api.run`, which returns the lint output as a triple of strings;
+3) **in-file testing**, the approach adopted in this thesis, in which negative assertions are encoded as `# type: ignore[<code>]` markers on ordinary Python source and enforced by `--warn-unused-ignores` together with `--enable-error-code ignore-without-code`.
+
+The three approaches involve different trade-offs. Subprocess-driven and API-driven approaches scale well to large negative-test suites, can target a single snippet at a time, and produce structured diagnostics that are convenient to assert on. They do not, however, integrate naturally with the editor: the test file is, from the editor's perspective, ordinary Python that happens to contain string-typed snippets, so the static analysis the developer sees while writing the test does not match the analysis the test fixture will eventually run. The in-file approach inverts that trade-off. Each test is a real Python function that mypy, pytest, and the editor all see in the same way, which makes the test as readable as ordinary code and as discoverable as any other pytest case. The cost is one global mypy flag (`--warn-unused-ignores`) and a stricter rule on comments (`--enable-error-code ignore-without-code`), both of which apply uniformly to the codebase.
+
+For a project whose explicit goal is to exercise PEP 827 against established Python libraries, the in-file approach was selected because it keeps the unit of investigation — a real Python function consuming a real library — identical between the static and runtime layers. This is the property that allows a single test file to serve simultaneously as the static specification and as the runtime regression test.
+
+— What this setup does *not* yet evaluate, the author wishes to note, is whether the same approach scales to a project with hundreds of negative assertions distributed across many independent files; that question is left to future work, once the static layer accumulates a broader catalogue of meta-types.

@@ -1,7 +1,7 @@
 from typing import Any, Literal, Self, cast
 
 import typemap_extensions as typing
-from pydantic import BaseModel, create_model as _BaseModel
+from pydantic import BaseModel as _BaseModel
 
 
 type ModelDump[T] = typing.NewTypedDict[

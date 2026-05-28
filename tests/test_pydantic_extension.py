@@ -35,9 +35,9 @@ def mypy_test_leaf_dump_fields() -> None:
 
 
 def test_leaf_dump_fields() -> None:
-    td = eval_typing(ModelDump[User])
-    assert td.__annotations__["name"] is str
-    assert td.__annotations__["age"] is int
+    dump_type = eval_typing(ModelDump[User])
+    assert dump_type.__annotations__["name"] is str
+    assert dump_type.__annotations__["age"] is int
 
 
 # ── Feature: model_dump() returns a dict subclass ───────────────────────────
@@ -193,3 +193,72 @@ def test_type_checking_only_class_visible_to_runtime() -> None:
     assert "HiddenAtRuntime" in globals(), (
         "TYPE_CHECKING-only class was not promoted to the runtime module"
     )
+
+
+# ── Feature: model_dump() spreads as **kwargs into a matching function ─────
+# The point of returning ModelDump[Self] (a precise TypedDict) instead of
+# dict[str, Any] is that the dump flows straight into a function whose
+# parameters are *named* after the model's fields — and mypy validates
+# the call site against the TypedDict's keys and value types. This is
+# the load-bearing usability claim of the whole pydantic_extension
+# experiment.
+
+
+def mypy_test_dump_spreads_into_matching_kwargs() -> None:
+    if TYPE_CHECKING:
+
+        def write_user(*, name: str, age: int) -> None: ...
+
+        u = User(name="i3s", age=22)
+        write_user(**u.model_dump())
+
+
+def mypy_test_dump_spread_rejects_mismatched_kwarg_names() -> None:
+    if TYPE_CHECKING:
+
+        def write_renamed(*, username: str, years: int) -> None: ...
+
+        u = User(name="i3s", age=22)
+        write_renamed(**u.model_dump())  # type: ignore[misc]
+
+
+def mypy_test_dump_spread_rejects_function_taking_subset() -> None:
+    if TYPE_CHECKING:
+
+        def print_only_name(*, name: str) -> None: ...
+
+        u = User(name="i3s", age=22)
+        # 'age' is unexpected for print_only_name; the dump has both keys.
+        print_only_name(**u.model_dump())  # type: ignore[misc]
+
+
+def mypy_test_dump_spread_rejects_value_type_mismatch() -> None:
+    if TYPE_CHECKING:
+
+        def write_wrong_type(*, name: int, age: int) -> None: ...
+
+        u = User(name="i3s", age=22)
+        write_wrong_type(**u.model_dump())  # type: ignore[arg-type]
+
+
+def mypy_test_dump_spread_rejects_function_requiring_extra_kwarg() -> None:
+    if TYPE_CHECKING:
+
+        def write_with_extra(*, name: str, age: int, extra: str) -> None: ...
+
+        u = User(name="i3s", age=22)
+        write_with_extra(**u.model_dump())  # type: ignore[call-arg]
+
+
+def mypy_test_inherited_dump_spreads_into_kwargs() -> None:
+    if TYPE_CHECKING:
+
+        def write_admin(*, name: str, age: int, role: str) -> None: ...
+
+        a = Admin(name="i3s", age=23, role="root")
+        write_admin(**a.model_dump())
+
+
+def test_dump_spreads_into_matching_kwargs() -> None:
+    dump_type = eval_typing(ModelDump[User])
+    assert dump_type.__annotations__ == {"name": str, "age": int}

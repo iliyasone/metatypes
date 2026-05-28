@@ -4,43 +4,63 @@ Onboarding notes for AI coding agents and humans working in this repo.
 
 ## What this repo is
 
-`metatypes` is a thesis project designing an opt-in **meta-typing layer** for
-Python. The `pydantic_extension` package is the flagship case study: a
-`BaseModel` whose `model_dump()` returns a precisely-typed `TypedDict`
-(`ModelDump[Self]`) instead of `dict[str, Any]`.
+`metatypes` is a thesis project evaluating **PEP 827 (Type Manipulation)**
+as the shared substrate for an opt-in meta-typing layer in Python — a
+way for library authors to generate precisely-typed APIs at the *type*
+level (not just the value level), so that boilerplate CRUD models, sqlalchemy complex queries, numpy fixed lenght arrays, dynamically generated subclasses or typed dicts, can be expressed once and
+stay statically checkable. The bigger story lives in [THESIS.md](THESIS.md).
 
-## Read these first
+## PEP 827 is the foundation
 
-Before making non-trivial changes, read:
+[PEP 827](https://peps.python.org/pep-0827/) proposes a small set of
+*type-level* combinators — `Attrs[T]`, `Iter`, `Member[name, type]`,
+`NewTypedDict[*Members]`, `IsAssignable`, `IsEquivalent`, `Slice`, … —
+for building new types from existing ones, without new syntax.
 
-- [`WHY_METATYPES.md`](WHY_METATYPES.md) — the design rationale: how PEP
-  484 / 544 / 681 frame Python's typing surface, why a meta-typing layer is
-  opt-in shared infrastructure rather than per-library plugins, and what the
-  thesis is aiming for.
-- [PEP 827](https://peps.python.org/pep-0827/) — ....
+## The two execution tracks
+
+PEP 827 has two playgrounds:
+
+- **Runtime track — `typemap`.** Annotations are first-class objects
+  in Python. `typemap.type_eval.eval_typing(ModelDump[User])` returns
+  the actual `TypedDict` class — with proper `__annotations__` and
+  `__required_keys__` — by interpreting the PEP 827 combinators at
+  call time. This is the substrate for dynamic class factories and
+  introspection-based dispatch.
+
+- **Static track — `mypy-typemap` plugin.** A custom mypy plugin
+  understands the same combinators and evaluates them during
+  type-checking, so call sites like
+  `write_user(**u.model_dump())` validate without any runtime call.
+
+Together these mean PEP 827 can be used in real projects *today*,
+without waiting for language acceptance: users without the plugin
+still get the runtime evaluator (no advanced static checks), users
+with it get the full static experience. 
+
+## Learn more
+
+- [`WHY_METATYPES.md`](WHY_METATYPES.md) — the design rationale: how
+  PEP 484 / 544 / 681 frame Python's typing surface, why a meta-typing
+  layer is opt-in shared infrastructure rather than per-library
+  plugins, and what the thesis is aiming for.
+- [`THESIS.md`](THESIS.md)
 
 ## Important dependencies
-
-- **`typemap`** — pinned to the `develop` branch of
-  `iliyasone/python-typemap` (fork). Provides
-  `typemap.type_eval.eval_typing`, `eval_call_with_types`, and the
-  `typemap_extensions` namespace (`Attrs`, `Iter`, `Member`, `NewTypedDict`,
-  `IsAssignable`, `IsEquivalent`, `Slice`, …).
-- **`mypy`** — pinned to the `msullivan/mypy-typemap` fork. A custom mypy
-  plugin understands the metatypes DSL and evaluates type-level
-  combinators. Standard mypy will not type-check this codebase correctly.
-- **`pydantic`** — 2.13+. Standard.
+`typemap` pinned to the iliyasone/python-typemap (fork) - runtime side of PEP 827
+`mypy` pinned to the `msullivan/mypy-typemap` - static side of PEP 827
 
 ## How to run things
 
 ```bash
+uv sync --all-groups
 # Lint
 uv run ruff check .
 
 # Static type-check (this is the main banger — runs across the whole repo)
 uv run mypy --warn-unused-ignores --show-error-codes --enable-error-code ignore-without-code .
 
-# Tests (runtime side)
+# Run time type check
 uv run pytest
 ```
 
@@ -69,6 +89,3 @@ honest.
 - Use `pytest.mark.xfail(reason="…", strict=True)` for "we want this to
   work, it doesn't yet" (so when it eventually passes, `strict=True` flips
   it to a failure and forces us to remove the mark).
-- Use `pytest.mark.skip(reason="…")` only for "this can never be reflected
-  statically at all" (e.g. `model_dump(context=…)`, `fallback=…`).
-

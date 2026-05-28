@@ -422,3 +422,48 @@ def test_serialize_as_any() -> None: ...
     )
 )
 def test_polymorphic_serialization() -> None: ...
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# exclude + **kwargs spread — the motivating example
+# ──────────────────────────────────────────────────────────────────────────
+# Models routinely carry more fields than a downstream function accepts —
+# internal IDs, secret_name, audit columns, etc. The natural Pythonic way
+# to forward a model into such a function is
+#
+#     downstream(**model.model_dump(exclude={"secret_name", ...}))
+#
+# but it only typechecks once exclude= actually narrows ModelDump's keys.
+# Today the dump keeps every field, so the spread is rejected by mypy
+# (extra-key from **args). When narrowing lands, the `type: ignore[misc]`
+# below becomes unused and --warn-unused-ignores forces its removal.
+
+
+def mypy_test_exclude_unlocks_kwargs_spread() -> None:
+    if TYPE_CHECKING:
+
+        def write_only_name(*, name: str) -> None: ...
+
+        u = User(name="x", age=1)
+        # Aspired: exclude={"age"} drops 'age' from the TypedDict, leaving
+        # {name: str} — which matches write_only_name exactly.
+        write_only_name(**u.model_dump(exclude={"age"}))  # type: ignore[misc]
+
+
+@pytest.mark.xfail(
+    reason=(
+        "Aspired: exclude={'age'} narrows ModelDump's keys so the dump "
+        "can be spread into a function whose signature only names the "
+        "kept fields. The runtime exclude= already drops the key — the "
+        "missing piece is the type-level transform. Once it lands, the "
+        "static call site typechecks without a `# type: ignore[misc]`."
+    ),
+    strict=True,
+)
+def test_exclude_unlocks_kwargs_spread() -> None:
+    def write_only_name(*, name: str) -> tuple[str]:
+        return (name,)
+
+    u = User(name="x", age=1)
+    assert write_only_name(**u.model_dump(exclude={"age"})) == ("x",)  # type: ignore[misc]
+    raise AssertionError("exclude-driven narrowing for kwargs spread not yet typed")
