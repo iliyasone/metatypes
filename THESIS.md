@@ -7,11 +7,15 @@ fontsize: 11pt
 linkcolor: blue
 header-includes:
   - \usepackage{tikz}
-  - \usetikzlibrary{arrows.meta, positioning, shapes.geometric, fit, calc}
+  - \usetikzlibrary{arrows.meta, positioning, shapes.geometric, fit, calc, backgrounds}
   - \usepackage{caption}
   - \captionsetup[figure]{name=Fig., labelsep=period, font=small, labelfont=bf}
   - \usepackage{float}
   - \floatplacement{figure}{H}
+  - \usepackage{xcolor}
+  - \usepackage{framed}
+  - \definecolor{shadecolor}{HTML}{EFEFEF}
+  - \renewenvironment{Shaded}{\begin{snugshade}}{\end{snugshade}}
 ---
 
 ## 3. Design and Methodology
@@ -42,32 +46,6 @@ def list_users(db: Annotated[Session, Depends(get_db)]) -> list[User]: ...
 ```
 
 In this example, the annotation is not only a hint for a static type checker. It is part of the object inspected by the framework at runtime. FastAPI reads the function signature, recovers the `Annotated` metadata, resolves the dependency, and may also use the return annotation to derive the response model.
-
-
-```python
-from functools import singledispatch
-
-type Json = dict[str, Json] | list[Json] | str | bool | float | int | None
-
-
-@singledispatch
-def render(node: Json) -> str:
-    return repr(node)
-
-
-@render.register
-def _(node: dict) -> str:
-    return "{ " + ", ".join(f"{k}: {render(v)}" for k, v in node.items()) + " }"
-
-
-@render.register
-def _(node: list) -> str:
-    return "[" + ", ".join(render(v) for v in node) + "]"
-```
-
-The recursive alias `type Json = dict[str, Json] | list[Json] | str | bool | float | int | None` deserves its own remark: a complete, type-checkable specification of JSON values in a single line is a feature one usually associates with Haskell or OCaml, not with a dynamically typed scripting language. Modern Python typing is closer to that lineage than its reputation suggests.
-
-— In the author's view, this single-line recursive alias is one of the most striking demonstrations of how far Python's type system has evolved; it earns its place in any introduction to the topic.
 
 A more substantial example follows from the [FastAPI SQL-databases tutorial](https://fastapi.tiangolo.com/tutorial/sql-databases/#heroupdate-the-data-model-to-update-a-hero), which shows that three near-identical classes are required for the basic Create, Read, and Update operations of a Pydantic-backed CRUD API:
 
@@ -144,9 +122,10 @@ This combination unlocks advanced type manipulation starting today.
 
 #### 3.3.1 Duality of Python annotations: static versus runtime
 
+
 The central difficulty encountered while exercising the typemap DSL is the **genuine semantic gap** between annotations as static artefacts and annotations as runtime values. This is the point at which critics of Python typing tend to feel vindicated.
 
-The constant `typing.TYPE_CHECKING` evaluates to `False` at runtime and to `True` during static analysis. It was introduced in 2016 (see [python/typing issue #230](https://github.com/python/typing/issues/230)) to address two narrow problems:
+The constant `typing.TYPE_CHECKING` evaluates to `False` at runtime and to `True` during static analysis. It was introduced in 2016 by BDFL (see [python/typing issue #230](https://github.com/python/typing/issues/230)) to address two narrow problems:
 
 1) lazy imports of heavy libraries that are referenced only in annotations;
 2) forward references to self and to classes not yet declared at the point of use.
@@ -170,7 +149,19 @@ The static side type-checks cleanly; the runtime side cannot even resolve the na
 
 #### 3.3.2 TypeAliases are not runtime classes
 
-The expression `Create[Hero]` evaluates, under the typemap runtime, to a structure of the form
+Consider `Hero` SQL model, which has a primary_key auto-increment field, optional field, and secret field. 
+
+```python
+class Hero(NewSQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+
+    name: str = Field(index=True)
+    age: int | None = Field(default=None, index=True)
+
+    secret_name: str = Field(hidden=True)
+```
+
+Lets look at the expression `Create[Hero]` and which it evaluates to under the typemap runtime, to a structure of the form:
 
 ```python
 class Create[__main__.Hero]:
@@ -179,7 +170,13 @@ class Create[__main__.Hero]:
     secret_name: str
 ```
 
-The subtle point is that the result is a `TypeAlias`, not a runtime class. Therefore `Create[Hero]()` cannot be used directly to construct an instance. This is not a serious obstacle, because Pydantic already provides a runtime API (`pydantic.create_model`) for synthesising classes from a field specification. Once a `Create[Hero]` alias is in hand, lifting it into an instantiable class is mechanical:
+The subtle point is that the result is a `TypeAlias`, not a runtime class. Therefore
+
+```python
+Create[Hero](name="ilias",secret_name="i3s")
+```
+
+cannot be used directly to construct an instance. This is not a serious obstacle, because Pydantic already provides a runtime API (`pydantic.create_model`) for synthesising classes from a field specification. Once a `Create[Hero]` alias is in hand, lifting it into an instantiable class is mechanical:
 
 ```python
 def create_model[T](model: type[T]) -> type[T]:
@@ -229,10 +226,10 @@ Third, **nominal typing**, by class hierarchy. PEP 827 currently provides no gen
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}[
-  node distance=7mm and 22mm,
-  box/.style={draw, rectangle, rounded corners=2pt, minimum width=3.6cm, minimum height=10mm, align=center, font=\small},
+  node distance=9mm and 30mm,
+  box/.style={draw, rectangle, rounded corners=2pt, text width=3.8cm, minimum height=10mm, align=center, font=\small},
   dashedbox/.style={box, dashed},
-  group/.style={draw, rectangle, dashed, inner sep=10pt, rounded corners=4pt, fill=gray!5},
+  group/.style={draw, rectangle, dashed, inner xsep=12pt, inner ysep=16pt, rounded corners=4pt, fill=gray!5},
   lift/.style={->, dashed, >=Stealth, thick}
 ]
 \node[box] (S) {Structural / Protocol\\(PEP 544)};
@@ -247,13 +244,17 @@ Third, **nominal typing**, by class hierarchy. PEP 827 currently provides no gen
 \draw[lift] (T) -- node[midway, above, font=\scriptsize]{lifts to} (NTD);
 \draw[lift] (N) -- node[midway, above, font=\scriptsize]{lifts to} (NPB);
 
+\begin{pgfonlayer}{background}
 \node[group, fit={(S)(T)(N)}, label={[font=\small\bfseries]above:Python static type system}] {};
 \node[group, fit={(NP)(NTD)(NPB)}, label={[font=\small\bfseries]above:PEP 827 meta-level}] {};
+\end{pgfonlayer}
 \end{tikzpicture}
 \caption{The three coexisting type systems in Python and their PEP 827 counterparts at the meta level. The dashed node marks the meta combinator that the proposal sketches but does not yet implement.}
 \end{figure}
 
 — Working with these three layers in parallel is, in the author's experience, the single largest source of pathological corner cases in Python typing; gradual standardisation, one combinator at a time, is the realistic path forward. TypeScript's advanced type manipulation did not arrive in a single release either.
+
+\newpage
 
 ## 4. Implementation and Results
 
@@ -342,15 +343,15 @@ The condition on `field.definer` is the load-bearing piece, because in Python a 
 
 ```python
 class A:
-    bad_class_var_const = 1
+    bad_class_var= 1
 
 
 class B(A):
     pass
 
 
-B.bad_class_var_const += 1
-A.bad_class_var_const  # 1 or 2?
+B.bad_class_var += 1
+A.bad_class_var  # 1 or 2?
 ```
 
 After the in-place addition, `A.bad_class_var_const` is still `1`, while `B.bad_class_var_const` is `2`. The lookup `B.bad_class_var_const` on the right-hand side returned `A`'s class variable; the increment produced a new integer; the assignment installed the result on `B` rather than on `A`. The class dictionaries make the effect visible directly:
@@ -359,7 +360,7 @@ After the in-place addition, `A.bad_class_var_const` is still `1`, while `B.bad_
 >>> A.__dict__
 mappingproxy({'__module__': '__main__',
               '__firstlineno__': 1,
-              'bad_class_var_const': 1,
+              'bad_class_var': 1,
               '__static_attributes__': (),
               '__dict__': <attribute '__dict__' of 'A' objects>,
               '__weakref__': <attribute '__weakref__' of 'A' objects>,
@@ -369,7 +370,7 @@ mappingproxy({'__module__': '__main__',
               '__firstlineno__': 11,
               '__static_attributes__': (),
               '__doc__': None,
-              'bad_class_var_const': 2})
+              'bad_class_var': 2})
 ```
 
 \begin{figure}[H]

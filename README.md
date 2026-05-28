@@ -10,10 +10,18 @@
 uv run mypy --warn-unused-ignores --show-error-codes --enable-error-code ignore-without-code .
 ```
 
-Use `
 
 #### Abstarct Aiming
 Python's static type system is formally Turing complete, yet its practical expressiveness remains limited. For more than a decade, the Python community has debated the addition of basic constructs like the Intersection type, but these have yet to be accepted. Most modern type checkers, such as Pyright and Ty, do not offer any mechanism for extensibility at the meta-type level. Their position is that libraries should not rely on plugins but should use the standard PEP approach. I can agree with this view to some extent. Mypy does provide a clear way to write plugins, but each plugin is specific to a particular library. This leaves many advanced patterns — such as well-typed SQL in ORMs — either impossible or forced into tool-specific plugins or code generation tools. In this thesis, I want to introduce and develop a meta-type system for Python, packaged as an experimental library, which enables the definition and evaluation of advanced type-level constructs through a unified interface. My aim is not to propose a PEP or to challenge the core language philosophy, but to demonstrate a practical approach to expressive type checking that may be used by community-driven libraries and static analysis tools to declare typing constructs previously unachievable. The library is designed to be fully compatible with the optional, tool-enforced nature of type hints. I believe that a meta-type layer can substantially increase the power and utility of static type checking in Python, without requiring changes to the language itself. These types will be checked by a custom mypy plugin written by me, and I will be seeking recognition by Ty and Pyright.
+
+```python
+type Json = dict[str, Json] | list[Json] | str | bool | float | int | None
+```
+
+The recursive alias `type Json = dict[str, Json] | list[Json] | str | bool | float | int | None` deserves its own remark: a complete, type-checkable specification of JSON values in a single line is a feature one usually associates with Haskell or OCaml, not with a dynamically typed scripting language. Modern Python typing is closer to that lineage than its reputation suggests.
+
+— In the author's view, this single-line recursive alias is one of the most striking demonstrations of how far Python's type system has evolved; it earns its place in any introduction to the topic.
+
 
 ## 1. Introduction
 ### 1.1 Background 

@@ -106,3 +106,15 @@ pandoc THESIS.md -o THESIS.pdf --pdf-engine=xelatex
 - Use `pytest.mark.xfail(reason="…", strict=True)` for "we want this to
   work, it doesn't yet" (so when it eventually passes, `strict=True` flips
   it to a failure and forces us to remove the mark).
+
+## Code conventions
+
+### Lazy typing
+
+Never use `from __future__ import annotations`; Python 3.14 already has lazy annotations.
+
+Never use `Optional`; use `T | None`.
+
+Never use string over type when dealing with lazy annotations.
+
+Never use string type annotations for forward references, such as `list["User"]`. Python 3.14 has lazy annotations, so use the real type directly, such as `list[User]`.
