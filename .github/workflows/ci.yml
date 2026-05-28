@@ -18,6 +18,19 @@ jobs:
       - run: uv sync --all-groups
       - run: uv run ruff check .
 
+  thesis-lint:
+    name: thesis lint (ruff on Markdown code blocks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          python-version: "3.14"
+          enable-cache: true
+      - run: uv sync --all-groups
+      - name: ruff format Python blocks in Markdown
+        run: uv run python scripts/format_md_python.py --check THESIS.md README.md
+
   typecheck-test:
     name: typecheck (mypy) + test (pytest)
     runs-on: ubuntu-latest

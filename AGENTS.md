@@ -57,6 +57,11 @@ uv sync --all-groups
 # Lint
 uv run ruff check .
 
+# Format the Python code blocks embedded in the Markdown docs
+uv run python scripts/format_md_python.py THESIS.md README.md
+# CI mode — fail (don't rewrite) if any block isn't already formatted:
+uv run python scripts/format_md_python.py --check THESIS.md README.md
+
 # Static type-check (this is the main banger — runs across the whole repo)
 uv run mypy --warn-unused-ignores --show-error-codes --enable-error-code ignore-without-code .
 

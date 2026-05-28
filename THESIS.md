@@ -22,35 +22,43 @@ When PEP 827 (Type Manipulation) was published, the focus of this thesis shifted
 
 The authors of PEP 827 provide two playgrounds for the proposed DSL. The first is the **typemap** runtime library, which operates on annotations as ordinary Python objects. The second, discussed in Section 3.2, is the **mypy-typemap plugin**, which evaluates the same combinators during static type-checking.
 
-One might expect a runtime type evaluator to offer little value, given that the entire motivation for PEP 827 — and for this thesis — is to provide static analysis tools. That intuition is largely correct, yet it overlooks a property of Python that is central to the language: type annotations are first-class objects at runtime. They can be inspected, mutated, dispatched on, and used to generate further classes dynamically. Two standard examples illustrate this. The first is dependency injection in FastAPI, where the annotated parameter type drives a lookup at call time:
+One might expect a runtime type evaluator to offer little value, given that the entire motivation for PEP 827 — and for this thesis — is to provide static analysis tools. That intuition is largely correct, yet it overlooks a property of Python that is central to the language: type annotations are first-class objects at runtime. They can be inspected, transformed, and used by frameworks to derive runtime behavior.
 
+FastAPI is a standard example. A path operation function is not merely checked statically: FastAPI inspects its runtime signature. Parameter annotations are used to parse, validate, and document request data, while metadata carried through `typing.Annotated`, such as `Depends(...)`, is used to construct dependency injection behavior. For example:
 ```python
+from typing import Annotated
+
 from fastapi import Depends, FastAPI
+from sqlalchemy.orm import Session
 
 app = FastAPI()
 
-def get_db():
-    ...
+
+def get_db() -> Session: ...
+
 
 @app.get("/users")
-def list_users(db = Depends(get_db)) -> list[User]:
-    ...
+def list_users(db: Annotated[Session, Depends(get_db)]) -> list[User]: ...
 ```
 
-The second is single-dispatch over a recursive type alias, expressed with `functools.singledispatch` from the standard library:
+In this example, the annotation is not only a hint for a static type checker. It is part of the object inspected by the framework at runtime. FastAPI reads the function signature, recovers the `Annotated` metadata, resolves the dependency, and may also use the return annotation to derive the response model.
+
 
 ```python
 from functools import singledispatch
 
 type Json = dict[str, Json] | list[Json] | str | bool | float | int | None
 
+
 @singledispatch
 def render(node: Json) -> str:
     return repr(node)
 
+
 @render.register
 def _(node: dict) -> str:
     return "{ " + ", ".join(f"{k}: {render(v)}" for k, v in node.items()) + " }"
+
 
 @render.register
 def _(node: list) -> str:
@@ -68,15 +76,19 @@ class HeroBase(SQLModel):
     name: str = Field(index=True)
     age: int | None = Field(default=None, index=True)
 
+
 class Hero(HeroBase, table=True):
     id: int | None = Field(default=None, primary_key=True)
     secret_name: str
 
+
 class HeroPublic(HeroBase):
     id: int
 
+
 class HeroCreate(HeroBase):
     secret_name: str
+
 
 class HeroUpdate(HeroBase):
     name: str | None = None
@@ -143,8 +155,10 @@ Over time, however, `TYPE_CHECKING` has acquired a third and far more powerful u
 
 ```python
 if TYPE_CHECKING:
+
     class HiddenAtRuntime(BaseModel):
         secret: str
+
 
 def mypy_test_type_checking_only_class_visible_to_mypy() -> None:
     if TYPE_CHECKING:
@@ -184,11 +198,14 @@ First, **structural typing**, also known as duck typing or protocol typing. The 
 ```python
 class Duck(Protocol):
     name: str
+
     def migrate(self) -> None: ...
+
 
 def prepare_for_winter(duck: Duck) -> None:
     print("Duck %s moving to the South" % duck.name)
     duck.migrate()
+
 
 class Database:
     user: str
@@ -197,10 +214,10 @@ class Database:
     port: str
     name: str
 
-    def migrate(self) -> None:
-        ...
+    def migrate(self) -> None: ...
 
-prepare_for_winter(Database())   # accepted; no static warning
+
+prepare_for_winter(Database())  # accepted; no static warning
 ```
 
 One may reasonably argue that this is not an error: `prepare_for_winter` declared a structural interface and the `Database` class happens to satisfy it. Whether explicit or implicit interfaces are preferable is a separate discussion. The PEP 827 combinator that lifts this layer to the meta level is `NewProtocol`.
@@ -251,8 +268,9 @@ A counter-argument is that typing the result of `model_dump()` is not useful, si
 ```python
 def write_with_extra(*, name: str, age: int, extra: str) -> None: ...
 
+
 u = User(name="i3s", age=22)
-write_with_extra(**u.model_dump())   # rejected; would be impossible without PEP 827
+write_with_extra(**u.model_dump())  # rejected; would be impossible without PEP 827
 ```
 
 The fixtures `User`, `Admin`, and `Empty` used throughout the test suite are deliberately minimal:
@@ -260,12 +278,15 @@ The fixtures `User`, `Admin`, and `Empty` used throughout the test suite are del
 ```python
 from pydantic_extension import BaseModel
 
+
 class User(BaseModel):
     name: str
     age: int
 
+
 class Admin(User):
     role: str
+
 
 class Empty(BaseModel):
     pass
@@ -323,11 +344,13 @@ The condition on `field.definer` is the load-bearing piece, because in Python a 
 class A:
     bad_class_var_const = 1
 
+
 class B(A):
     pass
 
+
 B.bad_class_var_const += 1
-A.bad_class_var_const   # 1 or 2?
+A.bad_class_var_const  # 1 or 2?
 ```
 
 After the in-place addition, `A.bad_class_var_const` is still `1`, while `B.bad_class_var_const` is `2`. The lookup `B.bad_class_var_const` on the right-hand side returned `A`'s class variable; the increment produced a new integer; the assignment installed the result on `B` rather than on `A`. The class dictionaries make the effect visible directly:

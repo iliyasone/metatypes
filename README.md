@@ -34,14 +34,17 @@ Consider the following proposed meta-types: `Add`, `AnyNat`, `Mul`, `Len`, and `
 ```python
 from metatypes import AnyNat, reveal_type
 
+
 class Vector[Typ, N]:
     """Vector of length N with elements of type Typ."""
 
+
 def matmul[Typ, N: AnyNat, K: AnyNat, M: AnyNat](
-    a: Vector[Vector[Typ, K], N],       # Matrix (N x K)
-    b: Vector[Vector[Typ, M], K],       # Matrix (K x M)
-) -> Vector[Vector[Typ, M], N]:         # Matrix (N x M)
+    a: Vector[Vector[Typ, K], N],  # Matrix (N x K)
+    b: Vector[Vector[Typ, M], K],  # Matrix (K x M)
+) -> Vector[Vector[Typ, M], N]:  # Matrix (N x M)
     """Matrix multiplication: (N x K) * (K x M) = (N x M)"""
+
 
 def example():
     ...
@@ -185,19 +188,21 @@ Python can implement the runtime behavior trivially, but the shared typing langu
 
 from typing import Any
 
-def select(row: dict[str, Any], keys: list[str]) -> dict[str, Any]: 
-    out: dict[str, Any] = {} 
+
+def select(row: dict[str, Any], keys: list[str]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
     for k in keys:
         out[k] = row[k]
     return out
 
+
 row = {"id": 1, "email": "a@b.com", "age": 30, "isAdmin": False}
 
 projected = select(row, ["id", "email"])
-projected["id"].to_bytes(2, "little") # reveal type: Any
+projected["id"].to_bytes(2, "little")  # reveal type: Any
 # 🚫 type checker cannot rely on int here
 
-projected["age"] 
+projected["age"]
 # 🚫 not rejected: key-level precision is lost
 ```
 
