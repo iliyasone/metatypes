@@ -1,3 +1,19 @@
+---
+title: "A Meta-Type System for Python: An Expressive Library for Static Typing"
+author: "Ilias Dzhabbarov"
+date: "May 2026"
+geometry: margin=2.5cm
+fontsize: 11pt
+linkcolor: blue
+header-includes:
+  - \usepackage{tikz}
+  - \usetikzlibrary{arrows.meta, positioning, shapes.geometric, fit, calc}
+  - \usepackage{caption}
+  - \captionsetup[figure]{name=Fig., labelsep=period, font=small, labelfont=bf}
+  - \usepackage{float}
+  - \floatplacement{figure}{H}
+---
+
 ## 3. Design and Methodology
 
 ### 3.1 System design
@@ -68,8 +84,6 @@ class HeroUpdate(HeroBase):
     secret_name: str | None = None
 ```
 
-<!-- IEEE 2-col page 1 ends here (approx, assuming abstract + introduction of ~250 words precede this point in the eventual paper assembly). -->
-
 This thesis argues that the pattern is not Pythonic. Create, Read, and Update are boilerplate projections of a single underlying class; whether they should live under one namespace is a separate design discussion, with reasonable arguments on both sides. The point relevant here is more narrow: these classes can already be generated in Python at runtime, and have been for some time, by a function of roughly the following shape:
 
 ```python
@@ -90,28 +104,7 @@ Disadvantages:
 1) broken static analysis: language servers no longer understand the generated classes;
 2) typos and shape mismatches surface only at runtime, often in production.
 
-The remainder of this chapter shows how the two PEP 827 playgrounds, taken together, allow both columns to be enjoyed.
-
-
-```mermaid
-flowchart TB
-    subgraph PT["Python static type system"]
-        S["Structural / Protocol<br/>(PEP 544)"]
-        T["TypedDict<br/>(PEP 589)"]
-        N["Nominal<br/>(PEP 484)"]
-    end
-    subgraph M["PEP 827 meta-level"]
-        NP["NewProtocol"]
-        NTD["NewTypedDict"]
-        NPB["NewProtocolWithBases<br/>proposed, not implemented"]
-    end
-    S -.lifts to.-> NP
-    T -.lifts to.-> NTD
-    N -.lifts to.-> NPB
-    style NPB stroke-dasharray: 4 4
-```
-
-
+The remainder of this chapter shows how the two PEP 827 playgrounds, taken together, allow both columns to be enjoyed (Fig. 1 anticipates the resulting picture and is discussed in full in Section 3.3.3).
 
 ### 3.2 Assumptions
 
@@ -216,9 +209,32 @@ Second, **TypedDict-based subtyping**. The relation `{"name": str, "age": int} <
 
 Third, **nominal typing**, by class hierarchy. PEP 827 currently provides no general meta combinator for this layer. The proposal sketches one, `NewProtocolWithBases[Bases: tuple[type], *Ms: Member]`, but no implementation is yet available. A direct consequence is that `Create[Hero]` is not statically a Pydantic model: it is structurally compatible with one, yet the nominal relationship cannot yet be expressed at the meta level.
 
-\input{figures/type-system-lift.tex}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=7mm and 22mm,
+  box/.style={draw, rectangle, rounded corners=2pt, minimum width=3.6cm, minimum height=10mm, align=center, font=\small},
+  dashedbox/.style={box, dashed},
+  group/.style={draw, rectangle, dashed, inner sep=10pt, rounded corners=4pt, fill=gray!5},
+  lift/.style={->, dashed, >=Stealth, thick}
+]
+\node[box] (S) {Structural / Protocol\\(PEP 544)};
+\node[box, below=of S] (T) {TypedDict\\(PEP 589)};
+\node[box, below=of T] (N) {Nominal\\(PEP 484)};
 
-*Fig. 2. The three coexisting type systems in Python and their PEP 827 counterparts at the meta level. The dashed node marks the meta combinator that the proposal sketches but does not yet implement.*
+\node[box, right=of S] (NP) {NewProtocol};
+\node[box, right=of T] (NTD) {NewTypedDict};
+\node[dashedbox, right=of N] (NPB) {NewProtocolWithBases\\(proposed, not implemented)};
+
+\draw[lift] (S) -- node[midway, above, font=\scriptsize]{lifts to} (NP);
+\draw[lift] (T) -- node[midway, above, font=\scriptsize]{lifts to} (NTD);
+\draw[lift] (N) -- node[midway, above, font=\scriptsize]{lifts to} (NPB);
+
+\node[group, fit={(S)(T)(N)}, label={[font=\small\bfseries]above:Python static type system}] {};
+\node[group, fit={(NP)(NTD)(NPB)}, label={[font=\small\bfseries]above:PEP 827 meta-level}] {};
+\end{tikzpicture}
+\caption{The three coexisting type systems in Python and their PEP 827 counterparts at the meta level. The dashed node marks the meta combinator that the proposal sketches but does not yet implement.}
+\end{figure}
 
 — Working with these three layers in parallel is, in the author's experience, the single largest source of pathological corner cases in Python typing; gradual standardisation, one combinator at a time, is the realistic path forward. TypeScript's advanced type manipulation did not arrive in a single release either.
 
@@ -333,16 +349,26 @@ mappingproxy({'__module__': '__main__',
               'bad_class_var_const': 2})
 ```
 
-```mermaid
-flowchart TB
-    inst["instance attribute lookup<br/>obj.name"]
-    inst --> mro["walk type(obj).__mro__"]
-    mro --> chk["for each class C in the MRO,<br/>check 'name' in C.__dict__"]
-    chk --> hit["first hit returns<br/>(C, value)"]
-    hit --> attrs["Attrs[T] therefore walks the MRO,<br/>not T.__dict__ alone"]
-```
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=7mm,
+  box/.style={draw, rectangle, rounded corners=2pt, minimum width=7cm, minimum height=10mm, align=center, font=\small},
+  arrow/.style={->, >=Stealth, thick}
+]
+\node[box] (inst) {instance attribute lookup\\\texttt{obj.name}};
+\node[box, below=of inst] (mro) {walk \texttt{type(obj).\_\_mro\_\_}};
+\node[box, below=of mro] (chk) {for each class C in the MRO,\\check \texttt{'name' in C.\_\_dict\_\_}};
+\node[box, below=of chk] (hit) {first hit returns (C, value)};
+\node[box, below=of hit] (attrs) {\texttt{Attrs[T]} therefore walks the MRO,\\not \texttt{T.\_\_dict\_\_} alone};
 
-*Fig. 3. Attribute resolution on instances and the reason `Attrs[T]` is defined to walk the MRO rather than only the leaf class. Each attribute is owned by exactly one class along the chain — its `definer` — and the filters in `ModelDump[T]` are predicated on that ownership.*
+\draw[arrow] (inst) -- (mro);
+\draw[arrow] (mro) -- (chk);
+\draw[arrow] (chk) -- (hit);
+\draw[arrow] (hit) -- (attrs);
+\end{tikzpicture}
+\caption{Attribute resolution on instances and the reason \texttt{Attrs[T]} is defined to walk the MRO rather than only the leaf class. Each attribute is owned by exactly one class along the chain --- its \texttt{definer} --- and the filters in \texttt{ModelDump[T]} are predicated on that ownership.}
+\end{figure}
 
 — The asymmetry between class-level and instance-level attribute resolution is, in the author's view, the single most underappreciated detail in Python's data model; it is exactly the reason `Attrs[T]` must inspect every base class along the MRO rather than the leaf's `__dict__` alone.
 
@@ -400,16 +426,27 @@ The flag `--warn-unused-ignores` makes mypy report an error whenever a `# type: 
 
 Together, the two flags turn `# type: ignore[<code>]` into a *negative assertion*: the test asserts that mypy emits exactly `<code>` on this line. When the assertion holds, the ignore consumes the error and the run succeeds. When the assertion silently flips — that is, when mypy no longer emits `<code>` — the ignore becomes unused and the run fails, forcing the maintainer to remove the mark and acknowledge that the previously failing case now passes.
 
-```mermaid
-flowchart LR
-    src["source line:<br/>x = f()  # type: ignore[arg-type]"]
-    src --> mypy["uv run mypy<br/>--warn-unused-ignores<br/>--enable-error-code ignore-without-code"]
-    mypy --> q{"does mypy still emit<br/>error code 'arg-type'<br/>on this line?"}
-    q -- yes --> ok["ignore consumed;<br/>negative assertion holds;<br/>exit 0"]
-    q -- no --> fail["ignore unused;<br/>negative assertion violated;<br/>exit non-zero"]
-```
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=9mm and 13mm,
+  box/.style={draw, rectangle, rounded corners=2pt, align=center, font=\scriptsize, text width=3.2cm, minimum height=14mm},
+  decision/.style={draw, diamond, aspect=1.8, align=center, font=\scriptsize, inner sep=1pt, text width=2.4cm},
+  arrow/.style={->, >=Stealth}
+]
+\node[box] (src) {source line:\\\texttt{x = f()}\\\texttt{\# type: ignore[arg-type]}};
+\node[box, right=of src] (mypy) {\texttt{uv run mypy}\\\texttt{-{}-warn-unused-ignores}\\\texttt{-{}-enable-error-code}\\\texttt{ignore-without-code}};
+\node[decision, right=of mypy] (q) {does mypy still emit error code `arg-type' on this line?};
+\node[box, above right=of q] (ok) {ignore consumed; negative assertion holds; exit 0};
+\node[box, below right=of q] (fail) {ignore unused; negative assertion violated; exit non-zero};
 
-*Fig. 4. The negative-test workflow. Each `# type: ignore[<code>]` line acts as an assertion that mypy still emits `<code>` on that line; `--warn-unused-ignores` flips the assertion to a failure the moment the underlying error disappears.*
+\draw[arrow] (src) -- (mypy);
+\draw[arrow] (mypy) -- (q);
+\draw[arrow] (q) -- node[above, font=\scriptsize, sloped]{yes} (ok);
+\draw[arrow] (q) -- node[below, font=\scriptsize, sloped]{no} (fail);
+\end{tikzpicture}
+\caption{The negative-test workflow. Each \texttt{\# type: ignore[<code>]} line acts as an assertion that mypy still emits \texttt{<code>} on that line; \texttt{-{}-warn-unused-ignores} flips the assertion to a failure the moment the underlying error disappears.}
+\end{figure}
 
 #### 4.3.3 Comparison with alternative testing setups
 

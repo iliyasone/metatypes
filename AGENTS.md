@@ -70,6 +70,18 @@ fail with exactly this error code"). If mypy stops emitting the error, the
 ignore becomes unused and the run fails — that's how negative checks stay
 honest.
 
+## Building the thesis
+
+```bash
+# install dependencies 
+sudo apt update
+sudo apt install texlive-xetex texlive-latex-extra texlive-fonts-recommended
+sudo apt install fonts-dejavu fonts-liberation
+# build THESIS
+pandoc THESIS.md -o THESIS.pdf --pdf-engine=xelatex
+```
+
+
 ## Test conventions
 
 - **One concern per test function**; descriptive names.
