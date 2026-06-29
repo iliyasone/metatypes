@@ -20,6 +20,8 @@ header-includes:
 
 
 ## 0. Pre-writing (do before chapters)
+**Research problem**: Python's type system cannot express types produced by metaprogramming. E.g. the results of many SQL/ORM queries resolve to `Any` or incorrectly-typed attributes. PEP 827 adds type manipulation facilities to close this gap, but exact limits of these tools are unknown.
+
 
 - Define the **research problem**: locate a gap; answer the Context/Background + Relevance/Specificity questions.
 - Formulate **research question(s)** using FINER (Feasible, Interesting, Novel, Ethical, Relevant); use the X→Y phrasing; avoid yes/no, vague, and subjective questions.
