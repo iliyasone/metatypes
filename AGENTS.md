@@ -2,6 +2,19 @@
 
 Onboarding notes for AI coding agents and humans working in this repo.
 
+## Important — answering questions vs editing documents
+
+When the user asks a question — about the research question, the design,
+"what should X be?", "explain Y" — **answer in chat, with reasoning**. Two
+don'ts:
+
+- Do **not** edit `THESIS.md`, `WHY_METATYPES.md`, or any other document as a
+  side effect of answering.
+- Do **not** hand over ready-to-paste document text by default.
+
+Discuss the substance and let the user do the writing. Only produce paste-ready
+prose or edit a file when the user *explicitly* asks for it.
+
 ## What this repo is
 
 `metatypes` is a thesis project evaluating **PEP 827 (Type Manipulation)**
