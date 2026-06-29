@@ -20,9 +20,13 @@ header-includes:
 
 
 ## 0. Pre-writing (do before chapters)
-**Research problem**: Python's type system cannot express types produced by metaprogramming. E.g. the results of many SQL/ORM queries resolve to `Any` or incorrectly-typed attributes. PEP 827 adds type manipulation facilities to close this gap, but exact limits of these tools are unknown.
+**Research problem**: Python's type system cannot express types produced by metaprogramming. E.g. the results of many SQL/ORM queries resolve to `Any` or incorrectly-typed attributes. PEP 827 proposes type manipulation facilities intended to close this gap, but whether they actually do is unknown. 
 
-**Research questions**: To what extent can PEP 827's type manipulation facilities well-type a subset of SQLite? Which SQLite queries have a result type that PEP 827's tools cannot infer? Which SQLite prepare-time errors cannot be caught at type-check time using PEP 827's tools?
+**Research questions**: To what extent can PEP 827's type manipulation facilities well-type a subset of PostgreSQL?
+Which queries have a result type that PEP 827's tools cannot infer?
+Which ill-typed queries cannot be statically rejected using PEP 827's tools?
+
+*A query is well-typed iff the checker infers its exact result type (a named-key record matching PostgreSQL's output columns) and statically rejects it exactly when PostgreSQL would.
 
 **Hypothesis**: > On a defined subset of SQLite, PEP 827's type manipulation facilities well-type every query, whereas queries outside the subset may not be well-typed.
 
