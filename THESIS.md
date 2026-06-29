@@ -22,11 +22,9 @@ header-includes:
 ## 0. Pre-writing (do before chapters)
 **Research problem**: Python's type system cannot express types produced by metaprogramming. E.g. the results of many SQL/ORM queries resolve to `Any` or incorrectly-typed attributes. PEP 827 adds type manipulation facilities to close this gap, but exact limits of these tools are unknown.
 
+**Research questions**: To what extent can PEP 827's type manipulation facilities well-type a subset of SQLite? Which SQLite queries have a result type that PEP 827's tools cannot infer? Which SQLite prepare-time errors cannot be caught at type-check time using PEP 827's tools?
 
-- Define the **research problem**: locate a gap; answer the Context/Background + Relevance/Specificity questions.
-- Formulate **research question(s)** using FINER (Feasible, Interesting, Novel, Ethical, Relevant); use the X→Y phrasing; avoid yes/no, vague, and subjective questions.
-- State **hypothesis** with: independent variable, dependent variable, population, relation between them.
-- For type 2 specifically: describe the goals of the investigation and the criteria/metrics to assess the outcome.
+**Hypothesis**: > On a defined subset of SQLite, PEP 827's type manipulation facilities well-type every query, whereas queries outside the subset may not be well-typed.
 
 ---
 
