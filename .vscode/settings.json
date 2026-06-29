@@ -4,5 +4,8 @@
         "**"
     ],
     "jupyter.debugJustMyCode": false,
-    "debugpy.debugJustMyCode": false
+    "debugpy.debugJustMyCode": false,
+    "cSpell.words": [
+        "Dzhabbarov"
+    ]
 }
