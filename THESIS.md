@@ -34,9 +34,13 @@ header-includes:
 
 ## Abstract
 
-Python's type system cannot express types produced by metaprogramming, yet metaprogramming is a native for Python and used
+Python's static type system cannot express types produced by metaprogramming, yet dynamically manipulating classes has been a native feature since day one.
 
-PEP 827 introduced new typing manipulation facilities to fill this gap. In this Thesis we will try to evaluate whenever this tools is actually enough to well-type something big, next level typings, which was not possible (to which extend we are clearly defined) before the PEP 827. Typing the untypable is now a reality: well-type PostgreSQL query builder.  Checkout demo at `github.com/iliyasone/tysql`
+PEP 827 proposes new type manipulation facilities to fill this gap, but whether they are sufficient for all cases remains unknown. This thesis has addressed that question by developing tysql, a PostgreSQL query builder whose result types can be statically inferred — a capability previously unattainable in Python. The tool is available with `pip install tysql`.
+
+tysql is usable today:
+- It statically infers the result type of every SQL statement and rejects ill-typed statements with a type error, using the type operators from PEP 827.
+- It capable of inserting type hints into existing code to infer result types of SQL statements in a pre-PEP 827 world, and it and ships a CLI validator that raises errors in the same places any type checker would once PEP 827 lands.
 
 ## 1. Introduction
 
