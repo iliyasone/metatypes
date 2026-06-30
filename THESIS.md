@@ -1,5 +1,5 @@
 ---
-title: "Well-Typed PostgreSQL in Python: The Limits of PEP 827's Type Manipulation"
+title: "A Meta-Type System for Python: An Expressive Library for Static Typing"
 author: "Ilias Dzhabbarov"
 date: "May 2026"
 documentclass: extarticle
@@ -198,9 +198,30 @@ reveal_type(row[0])
 reveal_type(row.id)
 ```
 
-A checker reports `int` for `row[0]` but `Any` for `row.id`: the value is typed only by position, never by name. SQLAlchemy 2.0 gives this projection the type `Row[tuple[int, str]]` — the column names are gone. The same blind spot appears with relationships: a loaded `Post` is typed as if `post.comments` were always a `list[Comment]`, even when the query never fetched them.
+A checker reports `int` for `row[0]` but `Any` for `row.id`: the value is typed only by position, never by name. SQLAlchemy 2.0 gives this projection the type `Row[tuple[int, str]]` — the column names are gone.
 
-Recovering the names — a precise record `{"id": int, "email": str}` — and rejecting queries that do not type-check is exactly what PEP 827's type manipulation makes possible, and what the rest of this thesis builds and measures.
+A subtler version of the same blind spot appears with relationships. Once the foreign keys of Fig. 2 are declared as ORM relationships, they can be traversed as ordinary attributes:
+
+```python
+class User(Base):
+    posts: Mapped[list[Post]] = relationship()
+
+
+class Post(Base):
+    author: Mapped[User] = relationship()
+    comments: Mapped[list[Comment]] = relationship()
+```
+
+Now select a single post and follow the relationships back out:
+
+```python
+post = session.scalars(select(Post).where(Post.id == 1)).one()
+reveal_type(post.author.posts[0].comments)
+```
+
+The checker resolves `post.author.posts[0].comments` to `list[Comment]` — every link is a declared relationship, so the entire chain type-checks. But `select(Post)` fetched a single `posts` row; the post's `author`, that author's other `posts`, and their `comments` were never loaded. The static type asserts a fully materialised object graph the query never produced — at runtime each step either fires another query (lazy loading) or raises on a closed session. Nothing in the result type records what a query actually fetched.
+
+Both failures share one root: the result type is declared up front, never computed from the query that produces it. Computing it from the query instead — so a `SELECT` yields a precise record such as `{"id": int, "email": str}`, naming exactly the columns it returns, and an ill-typed query becomes a type error — is what PEP 827's type manipulation makes possible, and what the rest of this thesis builds and measures.
 
 # Type manipulation facilities
 
