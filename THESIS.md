@@ -1,4 +1,36 @@
-# Well-Typed PostgreSQL in Python: The Limits of PEP 827's Type Manipulation
+---
+title: "Well-Typed PostgreSQL in Python: The Limits of PEP 827's Type Manipulation"
+author: "Ilias Dzhabbarov"
+date: "May 2026"
+documentclass: extarticle
+classoption:
+  - titlepage
+papersize: a4
+geometry:
+  - left=25mm
+  - right=20mm
+  - top=20mm
+  - bottom=20mm
+  - includefoot
+fontsize: 14pt
+mainfont: "Times New Roman"
+colorlinks: true
+linkcolor: black
+urlcolor: black
+citecolor: black
+toccolor: black
+toc: true
+toc-depth: 3
+numbersections: true
+include-before:
+  - \setcounter{page}{2}
+header-includes:
+  - \usepackage{tikz}
+  - \usetikzlibrary{arrows.meta, positioning, shapes.geometric, fit, calc, backgrounds}
+  - \usepackage{float}
+  - \floatplacement{figure}{H}
+  - \input{latex/innopolis-format.tex}
+---
 
 ## Abstract
 

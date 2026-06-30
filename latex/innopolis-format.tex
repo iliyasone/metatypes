@@ -1,0 +1,75 @@
+\usepackage{caption}
+\usepackage{adjustbox}
+\usepackage{etoolbox}
+\usepackage{framed}
+\usepackage{fvextra}
+\usepackage{indentfirst}
+\usepackage{setspace}
+
+\definecolor{shadecolor}{HTML}{F4F5F7}
+
+\AtBeginDocument{\onehalfspacing}
+\AtBeginDocument{\color{black}}
+\AtBeginDocument{\sloppy}
+
+\setlength{\parindent}{1.25cm}
+\setlength{\parskip}{0pt}
+\setlength{\emergencystretch}{3em}
+\makeatletter
+\@ifundefined{Highlighting}{}{%
+  \RecustomVerbatimEnvironment{Highlighting}{Verbatim}{
+    commandchars=\\\{\},
+    breaklines,
+    breakanywhere
+  }%
+}
+\@ifundefined{Shaded}{}{%
+  \renewenvironment{Shaded}{%
+    \vspace{0.6\baselineskip}%
+    \begin{center}%
+    \begin{minipage}{0.94\linewidth}%
+    \setlength{\FrameSep}{8pt}%
+    \begin{snugshade}%
+  }{%
+    \end{snugshade}%
+    \end{minipage}%
+    \end{center}%
+    \vspace{0.35\baselineskip}%
+  }%
+}
+\makeatother
+
+\BeforeBeginEnvironment{tikzpicture}{%
+  \begin{adjustbox}{max width=\linewidth,center}%
+}
+\AfterEndEnvironment{tikzpicture}{%
+  \end{adjustbox}%
+}
+
+\AtBeginDocument{%
+  \hypersetup{
+    linkcolor=black,
+    urlcolor=black,
+    citecolor=black,
+    filecolor=black
+  }%
+}
+
+\renewcommand{\contentsname}{CONTENTS}
+
+\renewcommand{\figurename}{Fig.}
+\captionsetup[figure]{
+  position=bottom,
+  justification=raggedright,
+  singlelinecheck=false,
+  labelsep=period
+}
+
+\renewcommand{\tablename}{TABLE}
+\renewcommand{\thetable}{\Roman{table}}
+\captionsetup[table]{
+  position=above,
+  justification=centering,
+  singlelinecheck=true,
+  labelsep=newline
+}
