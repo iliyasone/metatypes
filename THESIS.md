@@ -36,11 +36,11 @@ header-includes:
 
 Python's static type system cannot express types produced by metaprogramming, yet dynamically manipulating classes has been a native feature since day one.
 
-PEP 827 proposes new type manipulation facilities to fill this gap, but whether they are sufficient for all cases remains unknown. This thesis has addressed that question by developing tysql, a PostgreSQL query builder whose result types can be statically inferred — a capability previously unattainable in Python. The tool is available now: `pip install tysql`.
+PEP 827 proposes new type manipulation facilities to fill this gap, but whether they are sufficient for all cases remains unknown. This thesis has addressed that question by developing tysql, a PostgreSQL query builder whose result types can be statically inferred — a capability previously unattainable in Python. The online tool to infer the types will be available soon: tysql.vercel.app <TODO: FORMAT AS LINK>
 
 tysql is usable today:
 - It statically infers the result type of every SQL statement and rejects ill-typed statements with a type error, using the type operators from PEP 827.
-- It capable of inserting type hints into existing code to infer result types of SQL statements in a pre-PEP 827 world, and it and ships a CLI validator that raises errors in the same places any type checker would once PEP 827 lands.
+- In pre-PEP 827 world it ships a CLI validator that raises errors in the same places any type checker would once PEP 827 lands.
 
 # Introduction
 
@@ -125,7 +125,7 @@ From nothing but these annotations, FastAPI derives the interactive documentatio
 
 ## Current gap
 
-Three decades of work made Python's annotations remarkably capable. Yet one class of types still escapes them: the result of a database query. SQLAlchemy is at once the clearest showcase of annotation-driven runtime behaviour and the clearest demonstration of where it stops.
+Decade of work made Python's annotations remarkably capable. Yet one class of types still escapes them: the result of a database query. SQLAlchemy is at once the clearest showcase of annotation-driven runtime behaviour and the clearest demonstration of where it stops.
 
 A relational database stores rows of named, typed columns across related tables. The running example has three (Fig. 2): every post and comment belongs to a user, and every comment belongs to a post.
 
@@ -242,6 +242,11 @@ def build() -> Hidden:
 
 The checker accepts `build` — `Hidden` is in scope statically — yet the class is never defined at runtime, so calling `Hidden()` raises `NameError`. A meta-type can therefore carry a precise static meaning with no runtime counterpart, and (as later sections show) the reverse. Trusting either reading alone is unsafe.
 
+<TODO>
+Here I can describe open PR - https://github.com/vercel/python-typemap/pull/122
+where I fixing one problem into the typemap evaluator
+</TODO>
+
 ## Testing both paths
 
 Every feature is therefore exercised twice, by two adjacent functions over the same definition. The static half is type-only: its body lives under `if TYPE_CHECKING:`, so it never runs, but the checker still reads it, and `assert_type` states the expected type. The runtime half evaluates the same definition with `typemap`'s `eval_typing` and inspects the result directly. (`t.NewTypedDict` / `t.Member` are PEP 827 combinators that build a `TypedDict` at the type level; `eval_typing` is `typemap`'s runtime evaluator of the same expression.)
@@ -281,6 +286,24 @@ Under `--enable-error-code ignore-without-code` every `# type: ignore` must name
 
 > *(tentative — keep?)* Exercising the runtime track surfaced and fixed real bugs upstream: PR #117 (merged), PR #122 (open), and Issue #123, all on `vercel/python-typemap` — the kind of edge-case discovery PEP 827's standardisation needs.
 
+# Literature review
+
+<TODO: I had some lit review in the era before Remove THESIS commit into the README.md, probably a good source for it will be... https://github.com/iliyasone/metatypes/tree/9d277bb1dcb8bb187af0b4dc0c5ecc4431d017fa#2-literature-review>
+
+- sqlx in rust - but this is codegen at compile time
+
+the Diesel from rust and Squeal are genuene examples of a SQL DSL embeded into the another language. And this is what is going to be in Python now
+- Diesel ORM in rust
+- Squeal in Haskell
+- PrismaORM in type script 
+
+<TODO: would be great to have a code examples of each of this with a essence desription>
+<SUPERVISER>PEP 827 — основа всей работы, но он ни разу не процитирован и его нет в списке литературы; добавьте его (со статусом Draft и таргетом Python 3.16 — это важно как ограничение) и репозитории typemap. И в обзоре не хватает вашего же пространства решений: типизированные построители SQL и кодогенерация, а также PEP 646/692/695, на которые опирается ваш код. </SUPERVISER>
+Links to the typemap original repo!
+Links to the my repo also.
+Also ensure that how we cite in this file is correct - maybe it should be updated? maybe we should sometimes state the exact wording?
+
+
 # tysql: implementation and evaluation
 
 ## Schema as types
@@ -314,41 +337,86 @@ class User(Table):
 
 After the rewrite, `User.age` is no longer just `int | None` with its origin lost; it is `Column[User, Literal["age"], int | None]`. The column carries its table, its name, and its type wherever it goes, and every later operation — projection, `INSERT`, `JOIN` — reads those three facts straight off it.
 
-## The `run` spine: statements as values, type-level dispatch
+<not sure where to put this>
+## inert annotations
 
-> One non-overloaded `run[S](stmt: type[S], data: InOf[S]) -> OutOf[S]`. `InOf[S]` / `OutOf[S]` dispatch on the statement kind with chained `IsAssignable` + a `RaiseError` fallback — the organizing mechanism every statement family plugs into.
 
-## Writing: the INSERT family
+## Where annotations are actually evaluated
+| Observation | What it tells you |
+| --- | --- |
+| `Q.__value__` | what the combinators *encoded* (before any evaluation) |
+| `eval_typing(Q)` | what the **runtime** track (`typemap`) computes |
+| `reveal_type` / `assert_type` | what the **static** track (`mypy-typemap`) computes |
+| **PostgreSQL result metadata** | ground truth — what the query *actually returns* |
 
-> The enforced write path on the `run` spine: the `Insert[T]` statement and its computed input row, with `RETURNING` selecting the output type via `OutOf[S]`. *(The earlier `InsertInput[T]` and synthesized-signature spellings are superseded.)*
 
-## Reading: SELECT projection and JOIN
+<TODO>
+some cursed example of if tests/test_update_class.py (or maybe sliglty different example) - to show that in runtime values are actually collpased to the FALSE branch, when you try to access annotation.
+</TODO>
 
-> A `SELECT` projects columns into a named record `{"id": int, "email": str}`, not a positional tuple; a single `INNER JOIN` merges both tables' projected columns. *(The earlier value-builder `select(User.id, …)` spelling is superseded by the type-level statement form.)*
 
-## Evaluation: the typed subset and its walls
+## Back to the tysql
 
-> The well-typed subset **S** (CREATE TABLE, INSERT, projection, equality-`WHERE`, single JOIN); the precision ladder (exact → degraded → inexpressible); the walls where PEP 827 runs out (value-level arithmetic and comparison over the schema). Evaluated against PostgreSQL as the oracle.
+- each column has it is own Table - so it can be used inpendenetly
+- ugly syntax of dot notation. I can't use `User.id` as it is not a type-level statement. I required to use `GetMember[User, Literal["id"]]`. special rules are needed to distinguqt statements which are made on a type level
+- joins were more or less easy
+
+## WHERE Statements
+
+<TODO: checkout the `~/.t3` folder and find there a chat d409454e-7ea8-4b6d-8073-de74310e2426 - this is an agent who build where statemenst. he is saying it was the hardest part. >
+
+<TODO: you may be creative there - I really like how the columns with transformed Table type was looking like - cool>
+
+## Subset of PostgreSQL which is actually typed and which don't - state it there
 
 # Analysis and discussion
 
-> The community debate on whether these facilities belong in Python is ongoing — see the [PEP 827 discussion](https://discuss.python.org/t/106353). To write: the genuine trade-off (expressiveness vs. a second language in the annotations), what acceptance concretely requires (typing\_extensions + ≥1 checker + conformance tests; Pyright and ty reject plugins, so only a spec-able kernel can become first-class), how other languages type SQL, and tysql's roadmap.
 
-# Literature review
+> The community debate on whether these facilities belong in Python is ongoing.
 
-Placed here so it does not interrupt the argument, this chapter situates the work against Python's typing philosophy, the shape of the expressiveness gap, and prior attempts to close it.
 
-Python's type hints are optional and tool-oriented: PEP 484 frames them as a notation for offline static analysis, not a mechanism that changes runtime semantics [1]. Because the same annotations are consumed by several independent checkers, *portability* is a first-order constraint — a guarantee that depends on one checker's internals is not a guarantee in Python's ecosystem [1]. PEP 544 adds structural subtyping through `Protocol`, but only constrains existing objects; it cannot construct new types whose shape depends on runtime values [2]. PEP 681's `dataclass_transform` goes further by standardising a *declarative marker*: it performs no transformation itself, it only tells checkers to treat a class as dataclass-like [3]. The recurring choice is visible here — the ecosystem standardises a fixed signal, never type-level computation.
+<TODO i would explain there some points which people made on the discusson page:
+https://discuss.python.org/t/106353>
 
-Most hard Python typing problems share one cause: the type depends on runtime values, and the shared language has no portable way to express that dependency. A typed projection makes this concrete. TypeScript builds the result type from the inputs with the `Pick` operator and `const` assertions, so selecting a subset of columns yields a precisely typed record [4][5]. Python performs the same projection at runtime trivially, but cannot *name* the resulting type as a function of the selected keys [1]. The same limit appears with intersection and negation, which are not standardised as user-denotable operators even though narrowing arguments are naturally set-theoretic [6]; different checkers approximate them with incompatible internal rules, fragmenting the effective type system [7].
+"In my experience, if your logic is dynamic enough to need, for instance, conditional types, then it’s probably not worth trying to type it statically."
 
-Where the standard surface falls short, libraries reach for checker plugins. Mypy's plugin system exists precisely to teach the checker about patterns the annotation language cannot express [8]. SQLAlchemy shows both the value and the cost: its mypy plugin added precision for declarative mappings, but became a maintenance liability and was deprecated in 2.0 in favour of native annotations [9][10]. PEP 681 is the middle ground between a bespoke plugin and doing nothing — a shared, declarative contract that multiple tools implement uniformly [3].
+-- I can reply that SQL example is good why. 
 
-Finally, expressiveness is not the obstacle. Roth shows Python's type system is Turing-complete: arbitrary computation can be encoded into subtyping [11]. The limitation is not power but the absence of a designed, readable, portable surface for value-dependent type relationships — the gap PEP 827 targets and this thesis evaluates.
+Jelle Zijlstra is a member of a typing concilium (which is have a word should this PEP be accepted or no) so his opinion is worth highling a little more
+
+
+-- My take - tempting to repeat point again - type manipulations was in Python forever, just hidden. This DSL is a missing part: statickly type what was always in the language.
+
+-- Futur worok
+
+>
+
+
+ — see the [PEP 827 discussion](). To write: the genuine trade-off (expressiveness vs. a second language in the annotations), what acceptance concretely requires (typing\_extensions + ≥1 checker + conformance tests; Pyright and ty reject plugins, so only a spec-able kernel can become first-class)
+
+The new typemanipulations are in fact new sub language. For better or worse - your call. That is why it seems odd comparing to other stuff. But it is has a lot of benefits, as we genuinely don't want to mix the code which is running on the typecheck-compile time level.
+
 
 # Conclusion
 
-> Restate the question, summarise what tysql well-types and where PEP 827 stops, the contribution (a working type-level SQL builder + dual-track evidence), limitations, future work.
+This THESIS is largely description of how I tried to make all of this working. Which problems I had, forks created and bug fixes. But it nailed the Icebeirg of a Python Typesystem [for me] - exactly what was needed to increase the PEP 827 acceptance chances.
+
+Milestones:
+- Annotations are runtime classes
+- Annotations can be inspected in runtime 
+- Annotatinos in static world can be a little differ (TYPE_CHECKING)
+- **Annotations in runtime are Python code lines**, which are lazy when access (since 3.14, before evaluated immediatly ) [about it noww]
+- SpecialForms - interface for a function which is working in "type checknig time"
+- PEP 827 uses native if-else syntax in python but this is kinda crazy, because when the annotations are evaluated, all of them actually equal to 
+
+Next steps:
+- build nice online evaluator for tysql types so it would be easier to show the examples what is now possible
+- it will be into the tysql.vercel.app url
+- promote it and using python conferences so it would be more likely accepted
+
+# Appendix 
+
+<TODO desribe what I was describing before `Remove THESIS` commit into the THESIS.md -- the model_dump validators and pydantic updates and caveates with code examples>
 
 # References {.unnumbered}
 
