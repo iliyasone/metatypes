@@ -28,7 +28,7 @@ include = [
 where = ["src"]
 [dependency-groups]
 lint = [
-  "mypy @ git+https://github.com/msullivan/mypy-typemap.git",
+  "mypy @ git+https://github.com/iliyasone/mypy-typemap.git",
   "ruff>=0.14.7",
 ]
 
