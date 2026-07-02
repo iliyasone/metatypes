@@ -47,6 +47,12 @@ def mypy_test_before_class_update() -> None:
         # not fails because `Point.y` was a Custom field before transformation
 
 
+def mypy_test_local_scope() -> None:
+    type XL = IsCustomField[Point, Literal["x"]]
+    xl: XL
+    assert_type(xl, Literal[True])  # TODAY: fails — Never; goal state: passes
+
+
 def mypy_test() -> None:
     if TYPE_CHECKING:
         # Point.x `int` was transformed to `CustomField[int]`, mypy agrees
