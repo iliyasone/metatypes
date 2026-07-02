@@ -219,6 +219,11 @@ reveal_type(post.author.posts[0].comments)
 
 The checker resolves `post.author.posts[0].comments` to `list[Comment]` — every link is a declared relationship, so the entire chain type-checks. But `select(Post)` fetched a single `posts` row; the post's `author`, that author's other `posts`, and their `comments` were never loaded. The static type asserts a fully materialised object graph the query never produced — at runtime each step either fires another query (lazy loading) or raises on a closed session. Nothing in the result type records what a query actually fetched.
 
+<TODO>
+I would really love if there would be figure relation which would some how emphosize the complication of this query and relation. Maybe take the original figure and show in color with something?
+Actually no, it is not worth it, forget about it.
+</TODO>
+
 Both failures share one root: the result type is declared up front, never computed from the query that produces it. Computing it from the query instead — so a `SELECT` yields a precise record such as `{"id": int, "email": str}`, naming exactly the columns it returns, and an ill-typed query becomes a type error — is what PEP 827's type manipulation makes possible [12], and what the rest of this thesis builds and measures.
 
 ## Research question and contributions
@@ -257,6 +262,11 @@ The checker accepts `build` — `Hidden` is in scope statically — yet the clas
 
 ## PEP 827 in one page
 
+<TODO>
+I would actually start with a basics there - now we have tools to create a new type `NewProtocol` and `NewTypedDict`
+I think shemas would be very valuable like "this is type manipulation statement" and this is what it resolved to.
+</TODO>
+
 The gap the introduction ends on — a type that must be *computed* from a query — is exactly what PEP 827 [12] sets out to make expressible. It adds no new syntax; it adds a set of *type-level combinators*, ordinary generic aliases that a type checker knows how to evaluate. The ones this thesis leans on are few:
 
 - `Attrs[T]` and `Iter[…]` enumerate the members of a class at the type level, so an alias can loop over a schema's columns;
@@ -278,9 +288,12 @@ Nothing here is a value being computed at runtime in the ordinary sense; it is a
 
 ## Two evaluators for one language
 
-Because no shipping tool implements PEP 827, this thesis runs the same combinator language through two independent evaluators and requires them to agree.
+
+~Because no shipping tool implements PEP 827~, <TODO>too bold claim. The authors make an evaluator and a mypy static checker. So we actually have tools provided from the PEP authors</TODO>  this thesis runs the same combinator language through two independent evaluators and requires them to agree.
 
 - **The runtime track — `typemap`.** Annotations are first-class objects, so the combinators can be interpreted at run time. `typemap`'s `eval_typing(Wrap[User])` walks the alias and returns an actual `TypedDict` class, with real `__annotations__` and `__required_keys__` [13]. This is the track a program can use *today*, with no special checker, and the track the runtime tests introspect directly.
+
+<TODO>I remember typemap have something like nice_print_types we can show another interactive sheel there with a Wrap[User] result</TODO>
 - **The static track — a `mypy` fork.** A fork of `mypy` evaluates the very same aliases during type-checking, so a call site like `run(Select[User], data=…)` is validated with no runtime call at all [14]. This is the experience PEP 827 promises once standardised, available now to anyone who installs the fork.
 
 The two are not redundant. The static track is where the proposal's real value lies — errors before the program runs — but it is also where the fork's incompleteness bites, and several design decisions in tysql exist only because a construct that evaluates cleanly at runtime does *not* survive the fork (§*tysql: implementation and evaluation* returns to this repeatedly). The runtime track is complete enough to serve as a second opinion and as a fallback distribution channel. Holding a feature to *both* is what makes a green build meaningful (Fig. 4).
@@ -311,7 +324,32 @@ The two are not redundant. The static track is where the proposal's real value l
 \caption{The dual-track methodology. One combinator program is evaluated two independent ways --- interpreted at runtime by \texttt{typemap} and type-checked by the \texttt{mypy} fork --- and paired tests require the two results to agree. For the query subset, a live PostgreSQL adds a third, external check on whether the agreed type is actually correct.}
 \end{figure}
 
+<TODO>
+A lot of questions to this take. The reason we have 2 ways is deeply related with a Python dynamic nature - types are **runtime values**, and type annotations interpetered as a normal (lazy since Python 3.14) python statemenets. That is why we have 2 ways - because python type maniputors (and type annotations in general) should work in genuely 2 absolutely different context: 
+- static, evaluated by a tool at lint time
+- runtime, evaluted by Python Interpretator, at the runtime (when introspected)
+
+There we can add a statement about lazy annotations - maybe even another subchapter?
+idea: before python 3.14 (find exact pep pls) annotations were evaluated immediatly and something like this was not possible:
+
+```
+class Node[T]:
+    value: T
+    left: Node[T]
+    right: Node[T]
+```
+
+But there was a trick - `from future import annotations` which, if ever invoked, changed the CPython behaviour and just making annottaions strings. We lose the runtime class reference for introspection, but also all erros related to circular imports, ... etc are just stopped being a runtime issue.
+
+The problem is that this solution is just not Pythonic enough. Big part of annotations was that they contain actual class objects. Since Python 3.14 this issue was solved elegantly: the annotations remained python statemenets, but now they are evaluated only when you directly try to access them. so this is lazy statemnets.
+
+</TODO>
+
 ## Testing both paths
+
+<TODO>
+I definetly had a few cases where mypy and typemap test results are drifted (mention in one sentence which one). most of the times it is just the bug either into the mypy-fork or in runtime evaluators. But because of the typing.TYPE_CHECKING the drift may actually be real: if some annottains purely static only, we can't investigate it. in general those 2 paths may not be same. For the sake of a mental helth of a python developer, I would argue that into the Post 3.14 world (with lazy annotations), and especcially post 3.16 world the use of a typing.TYPE_CHECKING should be a code smell. (Opinion)
+</TODO>
 
 Every feature is therefore exercised twice, by two adjacent functions over the same definition. The static half is type-only: its body lives under `if TYPE_CHECKING:`, so it never runs, but the checker still reads it, and `assert_type` states the expected type. The runtime half evaluates the same definition with `typemap`'s `eval_typing` and inspects the result directly. (`t.NewTypedDict` / `t.Member` are PEP 827 combinators that build a `TypedDict` at the type level; `eval_typing` is `typemap`'s runtime evaluator of the same expression.)
 
@@ -347,6 +385,99 @@ def mypy_test_row_rejects_bad() -> None:
 Under `--enable-error-code ignore-without-code` every `# type: ignore` must name its code, and `--warn-unused-ignores` fails the run if the named error is no longer emitted. So `# type: ignore[typeddict-item]` asserts *"mypy must still flag this line"*: the day the negative case silently starts type-checking, the ignore becomes unused and CI turns red. `pytest.mark.xfail(strict=True)` gives the runtime track the same property for known static/runtime divergences — it flips to a failure the moment the gap closes.
 
 ## Four points of truth
+
+<TODO>
+This part is a real interested. We have those 3 levels - but they are not particually related to the tysql. I would not actually mention it there, or mention less. what I want to show is the simple example
+
+```python
+type X = int if typing.Bool[Literal[True]] else str
+```
+And this is where the got middle of the icebeirg is appearing - this statements should be valid python code.
+
+The reader my ask: why the type manipulation statemenst look so ugly? That is precisy the reason.
+we can't make a tuple type by `(int, 1 | 2)` - because this is just evaluate literally a tuple, and the 1 | 2 would be evaluated as a binary operator, not what intended to be `tuple[int | Literal[1] | Litera[2]]`. 
+
+The good news is that the sytanx may be always impoved later (for example https://imogenbits-peps.readthedocs.io/en/ast_format/pep-9999/ - suggests stop evaluating the anntotains and store them AST) or (some another pep which is suggests some new syntax... I remember something like <> used to distignush type level statemeents and the normal level)
+
+But at the end of the day any type annotation statement should be translated to python objects (because we should allow runtime introspection), so eventually the nice `(int, 1 | 2)` will still evaluate to the `tuple[int, Literal[1] | Literal[2]]`, so maybe it is even better that we using python type manipulatio statements from the day one?
+
+---
+
+Going back to the example, 
+
+```python
+type X = int if typing.Bool[Literal[True]] else str
+```
+
+Type statements are stayed lazy untill explicit introspection
+But what if we do?
+
+```python
+>>> X.evaluate_value() 
+<class 'str'>
+```
+
+Why? One level down to the icebeirg!
+
+The PEP 827 idea was so the all types, which was suggested - staying "inert", meaning that there is no any atomatic reduction of the `GetMember[User, Literal["id"]]` to the `int`. 
+Even when evaluated and introspected, they stayed as a type aliases. This is intentional design decision in PEP 827. Take a moment to realize that `inert` and `lazy` are not the same thing. Annotation is evaluated, but not reducted according to the rules.
+
+Who is doing the reduction? There are only 2 possible situations where we need to get a reducted type:
+- we are static type checker, and we are prepared for such case. we have resolving rules.
+- we are runtime introspection library, and we need to adapt. if we was expecting just some type to do some runtime introspection magic (final type, like `Pubic[Hero]`), in post PEP 827 we should deduct the types manually, using the 3rd-party `typemap` library. I would actually argue it should be in standart library as a part of language specification. 
+
+## Problem: if is evaluted
+
+consider this statement:
+```python
+def test() -> int if typing.Bool[Literal[True]] else str:
+    ...
+```
+
+one point into the icebearg bellow. 
+if you type this value literally in the interpetator shell:
+
+```python
+>>> int if typing.Bool[Literal[True]] else str
+<class 'str'>
+```
+
+because the boolean special forms always going to False into the runtime
+
+the typemap runtime doing some magic to actually prevent it. (I am not sure but I am guessing it is investigating the AST before evaluating the type - because it is taking as input still lazy not evaluted python statement in closure)
+
+if you first try to inspect annotations using normal tools, you will get an WRONG RESULT
+```python
+>>> test.__annotations__ # or typing.get_type_hints(test)
+{'return': str}
+```
+
+But if you use the evaluator
+
+```python
+from typemap.type_eval import eval_typing
+
+from typing import get_type_hints
+
+def test() -> int if typing.Bool[Literal[True]] else str:
+    ...
+    
+>>> eval_typing(test)
+<function __main__.test() -> int>
+```
+
+you will get correct result. and this **is not a bug**, as this behaviour is exactly described into the PEP 827 (boolean special forms is always to False because the stdlib should not now how to deduct)
+
+This is a tradeoff when you allow to use <... if ... else>
+(I hope I did everyhing correctly here?..)
+
+I think it not a really big deal, as the runtime introspection in post PEP 827 would just use the evaluator. but it is still maybe accidentally be cursed (because if the normal annotations would be called first, it would actually compute to the wrong branch and stayed forever - the typemap evalator is not doing this)
+
+I would suggest making of a Boolean speical forms __bool__ raise an error into the context free statements (when no evaluator is called, not simply return False).
+
+[Shit this is actually bigger then I though! lets format it nicely and then I will open an issue into the typemap repo, it is whole a lot topic. Also in last chapters, about plans, we could tell that this is what I am going to do next.] 
+
+</TODO>
 
 The paired tests answer *"do the two evaluators agree?"* They do not, by themselves, answer *"is the agreed-upon type correct?"* For that the query needs an authority outside the type system entirely. tysql therefore treats each statement as having four separate, checkable facts, and the methodology is to line them up:
 
@@ -484,15 +615,29 @@ class Table:
             setattr(cls, name, Column(cls, name, annotation))
 ```
 
+<TODO>
+I would not actually be so proud about merging the runtime and type paths in one class. But it felt nicely here, epseccially because without it `User.age` would be accesible in runtime, only into the static time. So the runtime half is a good to make the actual type manipualtion statements correct in a way what they are descrining. But in general they may not be defined in the same place and I don't have an answer wheneve this is a code smell or no.
+</TODO>
+
 The body is the *runtime* half and the return annotation is the *static* half, and they are deliberately the same rewrite expressed twice — the pattern the whole project rests on. After it runs, `User.age` is no longer just `int` with its origin lost; it is `Column[User, Literal["age"], int]`, carrying its table, its name and its type wherever it goes, and every later operation — projection, `INSERT`, `JOIN` — reads those three facts straight off it. A nullable column declared `T | None` is wrapped the same way, its `T | None` preserved verbatim in the third slot; this running two-table schema (used unchanged through the evaluation) keeps the columns non-null for brevity.
 
 ## Keys, and a lesson in where a combinator may sit
 
 Two column kinds carry extra meaning. `PrimaryKey[T]` marks the table's key: it is *optional* on insert (the database assigns it) and *unwrapped* on read (a `PrimaryKey[int]` column comes back as plain `int`), and in DDL it renders as `SERIAL PRIMARY KEY` for an integer key. `ForeignKey[Owner, Name]` records a reference to another table's column, and renders as a `REFERENCES` constraint; it is also what a join reads to know two tables are related.
 
+<TODO>
+Lets just rename `PrimaryKey` to `SerialPrimatyKey`. It is just seems wrong that PrimaryKey is not actually resolved to a PrimaryKey into the postgresql. and mark the normal PrimaryKey as not implemented
+
+</TODO>
+
 The foreign key's *spelling* is a small but instructive design scar. The natural way to write it would nest a column reference — `ForeignKey[Col[User, Literal["id"]]]` — but `Col` is a conditional alias with a `RaiseError` branch, and in **annotation position** the static fork eagerly evaluates that branch even when it is not taken, so a perfectly valid foreign key would trip its own "no such column" guard. Splitting the reference into two plain type arguments, `ForeignKey[User, Literal["id"]]`, keeps a conditional combinator out of annotation position entirely, and the error disappears. It is the same lesson the flat `Col` conditional and the name-slot scope check teach from other angles: on the static track, *where* a combinator sits — annotation versus value position, name slot versus value slot, taken versus untaken branch — changes whether it fires, and the library's shape is dictated as much by these evaluation-order facts as by the SQL it models.
 
 ## Two readings, and why neither can be trusted alone
+
+<TODO>
+I think it should be positioned as "look" i find bug in mypy fork, that is. Interesting still!
+This is proofs that the testing setup may found subtle bugs.
+</TODO>
 
 The rewrite exposes the split the methodology chapter warned about, in its sharpest form. Consider a class transformed by a marker like `Table`, and a type-level predicate asking whether one of its members is a `Column`:
 
@@ -541,6 +686,10 @@ type ResultOf[S: Statement] = t.GetArg[SpecOf[S], Spec, Literal[1]]
 An `Insert[User]` takes the non-primary-key columns as its `data` and yields the generated key; a `CreateTable` takes and returns nothing; anything the ladder does not recognise falls through to a `RaiseError`. The families plug into this spine one by one below.
 
 ## Referring to a column, and an unavoidable wart
+
+<TODO>
+I think we should mention also GetMemberType before, when we are talked about ugliness about python types. Is this block a kinda a repeat?
+<TODO>
 
 There is a syntactic price for keeping statements at the type level. A programmer would like to write `User.id`, but `User.id` is a *value* (the `Column` descriptor), not a type, and a statement type needs a *type-level* reference to the column. So a column is named with a combinator instead:
 
