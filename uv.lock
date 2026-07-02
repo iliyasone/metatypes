@@ -295,15 +295,15 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [{ name = "ipykernel", specifier = ">=7.2.0" }]
 lint = [
-    { name = "mypy", git = "https://github.com/msullivan/mypy-typemap.git" },
+    { name = "mypy", git = "https://github.com/iliyasone/mypy-typemap.git" },
     { name = "ruff", specifier = ">=0.14.7" },
 ]
 test = [{ name = "pytest", specifier = ">=9.0.3" }]
 
 [[package]]
 name = "mypy"
-version = "1.20.0+dev.b33f459c5a58531f34fbf23716f3062850e81b48"
-source = { git = "https://github.com/msullivan/mypy-typemap.git#b33f459c5a58531f34fbf23716f3062850e81b48" }
+version = "1.20.0+dev.e2e93a9d1d090799181f665bf2d70d99a8c69a8a"
+source = { git = "https://github.com/iliyasone/mypy-typemap.git#e2e93a9d1d090799181f665bf2d70d99a8c69a8a" }
 dependencies = [
     { name = "librt", marker = "platform_python_implementation != 'PyPy'" },
     { name = "mypy-extensions" },

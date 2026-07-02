@@ -1,7 +1,7 @@
-from typing import TYPE_CHECKING, Any, Literal, Never, assert_type, reveal_type
+from typing import TYPE_CHECKING, Any, Literal, assert_type
 
 import typemap_extensions as typing
-from typemap.type_eval import eval_typing, eval_call
+from typemap.type_eval import eval_typing
 
 
 class CustomField[T]:
@@ -43,14 +43,14 @@ def test_updated_class_ok():
 def mypy_test_before_class_update() -> None:
     if TYPE_CHECKING:
         foo: IsCustomField[Point, Literal["y"]]
-        assert_type(foo, Literal[True])
+        assert_type(foo, Literal[True])  # noqa: F821
         # not fails because `Point.y` was a Custom field before transformation
 
 
 def mypy_test_local_scope() -> None:
     type XL = IsCustomField[Point, Literal["x"]]
     xl: XL
-    assert_type(xl, Literal[True])  # TODAY: fails — Never; goal state: passes
+    assert_type(xl, Literal[True])  # noqa: F821  # TODAY: fails — Never; goal state: passes
 
 
 def mypy_test() -> None:
@@ -63,4 +63,4 @@ def mypy_test() -> None:
         foo: IsCustomField[Point, Literal["x"]]  # error: Field is not a CustomField!
 
         # And at the same time, the result type is evaluated correctly
-        assert_type(foo, Literal[True])  # no fail, as expected.
+        assert_type(foo, Literal[True])  # noqa: F821  # no fail, as expected.

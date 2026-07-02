@@ -24,6 +24,9 @@
     fontsize=\small
   }%
 }
+% IU requirement: all text black — strip syntax-highlighting colors,
+% keeping the bold/italic token styling.
+\AtBeginEnvironment{Highlighting}{\renewcommand{\textcolor}[3][]{#3}}
 \@ifundefined{Shaded}{}{%
   \renewenvironment{Shaded}{%
     \vspace{0.6\baselineskip}%

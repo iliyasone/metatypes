@@ -22,11 +22,11 @@ from typing import TYPE_CHECKING, Unpack, assert_type
 import pytest
 from typemap.type_eval import eval_typing
 
-from typed_sql.core import InsertInput, PrimaryKey, Table
+from typed_sql.core import InsertInput, SerialPrimaryKey, Table
 
 
 class User(Table):
-    id: PrimaryKey[int]
+    id: SerialPrimaryKey[int]
     email: str
     age: int | None
 
@@ -44,12 +44,12 @@ def mypy_test_insert_input_computes_row() -> None:
 @pytest.mark.xfail(
     reason=(
         "Dual-track divergence in the PK filter. The static-clean guard "
-        "`IsAssignable[x.type, Column[Any, Any, PrimaryKey[Any]]]` is too "
+        "`IsAssignable[x.type, Column[Any, Any, SerialPrimaryKey[Any]]]` is too "
         "permissive at runtime: typemap's IsAssignable treats the Any "
         "owner/name slots as matching EVERY column (id AND email both True), "
         "so all columns are filtered out -> empty TypedDict. The "
         "runtime-correct guard `IsAssignable[GetArg[x.type, Column, 2], "
-        "PrimaryKey[Any]]` trips finding #4 (file-level GetArg errors) on the "
+        "SerialPrimaryKey[Any]]` trips finding #4 (file-level GetArg errors) on the "
         "static track. No formulation is clean on both tracks yet "
         "(candidate: make Column covariant). InsertInput is STATIC-only today."
     ),
@@ -59,7 +59,7 @@ def test_insert_input_computes_row() -> None:
     td = eval_typing(InsertInput[User])
     assert td.__annotations__ == {"email": str, "age": int | None}
     assert td.__required_keys__ == frozenset({"email", "age"})
-    assert "id" not in td.__annotations__  # PrimaryKey dropped
+    assert "id" not in td.__annotations__  # SerialPrimaryKey dropped
 
 
 # ── Feature: a POSITIONAL TypedDict parameter consumes it (THE WORKING WAY) ──

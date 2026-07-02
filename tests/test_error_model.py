@@ -19,11 +19,11 @@ import pytest
 import typemap_extensions as t
 from typemap.type_eval import eval_typing
 
-from typed_sql.core import Column, Insert, PrimaryKey, Statement, Table
+from typed_sql.core import Column, Insert, SerialPrimaryKey, Statement, Table
 
 
 class User(Table):
-    id: PrimaryKey[int]
+    id: SerialPrimaryKey[int]
     email: str
     age: int | None
 
@@ -37,7 +37,7 @@ type InsertFn[T] = Callable[
         *[
             t.Param[x.name, t.GetArg[x.type, Column, Literal[2]], Literal["keyword"]]
             for x in t.Iter[t.Attrs[T]]
-            if not t.IsAssignable[x.type, Column[Any, Any, PrimaryKey[Any]]]
+            if not t.IsAssignable[x.type, Column[Any, Any, SerialPrimaryKey[Any]]]
         ]
     ],
     InsertStmt,
@@ -80,7 +80,7 @@ def mypy_test_never_is_silently_absorbed() -> None:
 def mypy_test_raise_error_surfaces() -> None:
     if TYPE_CHECKING:
         bad: t.RaiseError[Literal["sql: ill-typed expression"]]  # type: ignore[misc]
-        _ = bad
+        _ = bad  # noqa: F821
 
 
 # ── 4. Conditional RaiseError (PEP ternary) — the validity-gate primitive ─────

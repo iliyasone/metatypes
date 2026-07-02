@@ -29,11 +29,11 @@ Run:
 
 from typing import TYPE_CHECKING, TypedDict, Unpack, assert_type
 
-from typed_sql.core import Insert, InsertInput, PrimaryKey, Table
+from typed_sql.core import Insert, InsertInput, SerialPrimaryKey, Table
 
 
 class User(Table):
-    id: PrimaryKey[int]
+    id: SerialPrimaryKey[int]
     email: str
     age: int | None
 

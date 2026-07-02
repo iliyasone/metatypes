@@ -17,7 +17,7 @@ Two caveats, both encoded below:
    (FK value-type resolution is a separate step).
  * Runtime divergence: `eval_typing(InsertFn[User])` collapses to empty params.
    Same root cause as InsertInput — the Any-laden PK guard
-   `IsAssignable[col, Column[Any, Any, PrimaryKey[Any]]]` matches EVERY column at
+   `IsAssignable[col, Column[Any, Any, SerialPrimaryKey[Any]]]` matches EVERY column at
    runtime. Synthesis is a STATIC contract (enforcement happens in the checker).
 
 Run:
@@ -32,17 +32,17 @@ import pytest
 import typemap_extensions as t
 from typemap.type_eval import eval_typing
 
-from typed_sql.core import Column, ForeignKey, PrimaryKey, Statement, Table
+from typed_sql.core import Column, ForeignKey, SerialPrimaryKey, Statement, Table
 
 
 class User(Table):
-    id: PrimaryKey[int]
+    id: SerialPrimaryKey[int]
     email: str
     age: int | None
 
 
 class Post(Table):
-    id: PrimaryKey[int]
+    id: SerialPrimaryKey[int]
     author: ForeignKey[User, Literal["id"]]
 
 
@@ -56,7 +56,7 @@ type InsertFn[T] = Callable[
         *[
             t.Param[x.name, t.GetArg[x.type, Column, Literal[2]], Literal["keyword"]]
             for x in t.Iter[t.Attrs[T]]
-            if not t.IsAssignable[x.type, Column[Any, Any, PrimaryKey[Any]]]
+            if not t.IsAssignable[x.type, Column[Any, Any, SerialPrimaryKey[Any]]]
         ]
     ],
     InsertStmt,
@@ -122,7 +122,7 @@ def mypy_test_synth_fk_column_unresolved() -> None:
         "synthesized signature is (*, email: str, age: int | None), but "
         "eval_typing(InsertFn[User]) collapses to Callable[Params[()], ...] — "
         "the Any-laden PK guard IsAssignable[col, Column[Any, Any, "
-        "PrimaryKey[Any]]] returns True for EVERY column at runtime, so all are "
+        "SerialPrimaryKey[Any]]] returns True for EVERY column at runtime, so all are "
         "filtered out. Enforcement is static; the runtime evaluator drops all "
         "params. Fix candidate: make Column covariant / a slot-2 guard."
     ),

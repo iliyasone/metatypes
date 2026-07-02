@@ -29,7 +29,7 @@ class Column[Owner, Name, T]:
         return f"Column({self.owner.__name__}.{self.name}: {tn})"
 
 
-class PrimaryKey[T]:
+class SerialPrimaryKey[T]:
     pass
 
 
@@ -38,7 +38,7 @@ class ForeignKey[Ref, Name]:
 
 
 # The INSERT input row, computed at the *type* level from the schema: every
-# non-PrimaryKey column becomes a REQUIRED key with its declared type. This is
+# non-SerialPrimaryKey column becomes a REQUIRED key with its declared type. This is
 # the contract that makes `Insert[User]({...})` demand exactly email + age.
 #
 # Consumed as a positional TypedDict ("values by keys"), NOT as **kwargs.
@@ -53,7 +53,7 @@ type InsertInput[T] = t.NewTypedDict[
     *[
         t.Member[x.name, t.GetArg[x.type, Column, Literal[2]]]
         for x in t.Iter[t.Attrs[T]]
-        if not t.IsAssignable[x.type, Column[Any, Any, PrimaryKey[Any]]]
+        if not t.IsAssignable[x.type, Column[Any, Any, SerialPrimaryKey[Any]]]
     ]
 ]
 
@@ -110,6 +110,7 @@ class Table:
         # runtime half: turn each annotation into a real Column descriptor
         for name, ann in get_type_hints(cls).items():
             setattr(cls, name, Column(cls, name, ann))
+        return None  # type: ignore[return-value]
 
 
 # Consumers — GOAL surface, intentionally UNIMPLEMENTED (see tests/test_insert.py).
