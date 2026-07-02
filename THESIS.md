@@ -257,7 +257,7 @@ The answer is delivered as an artefact and an evaluation. The artefact is **tysq
 1. a type-level PostgreSQL builder that infers the result record of every statement in **S** and rejects out-of-schema references at check time (§*tysql: implementation and evaluation*);
 2. a **dual-track methodology** that keeps a runtime evaluator and a static checker in lock-step, with negative assertions that fail loudly when a check stops firing (§*Design and methodology*);
 3. a **PostgreSQL-oracle evaluation** that confirms exact inference across **S** and pins down the three walls beyond it — inexpressible aggregates and outer-join nullability, collapsing duplicate names, and unsound value comparison (§*tysql: implementation and evaluation*);
-4. concrete feedback for standardisation, including fixes merged into PEP 827's reference tooling and an account of what acceptance requires (§*Analysis and discussion*).
+4. concrete feedback for standardisation, including fixes to PEP 827's reference tooling — one already merged — and an account of what acceptance requires (§*Analysis and discussion*).
 
 The thesis is organised accordingly. *Literature review* places the work against Python's typing philosophy, the two ways other languages type SQL, and the proposal itself. *Design and methodology* introduces PEP 827's combinators, the two-evaluator (runtime/static) setup, the paired-test discipline that keeps them honest, and PostgreSQL-as-oracle. *tysql: implementation and evaluation* builds the query builder family by family and then measures it against the oracle. *Analysis and discussion* reads the results into the live debate over the proposal, and *Conclusion* summarises the answer and the road to standardisation.
 
@@ -588,16 +588,16 @@ Only the fourth is independent of tysql, of `typemap`, and of the fork. A relati
 
 Holding a feature to both tracks did more than catch divergences in tysql — it surfaced genuine defects in the reference tooling itself, which is exactly the edge-case exercise a Draft PEP needs before standardisation. Three issues on the `typemap` evaluator came out of this work: a fix now merged (PR #117), a fix still open (PR #122), and a reported defect (Issue #123).
 
-PR #122 is representative. Evaluating a `TypedDict`-building alias over an *empty* member list — the honest result of a comprehension whose filter rejects every column — drove the evaluator down a branch that assumed at least one member and raised instead of returning the empty `TypedDict`. The alias was correct PEP 827; the interpreter was not. The fix makes the zero-member case return a well-formed empty `TypedDict`, matching how the static fork already treats it, so the two tracks agree again. The value of the contribution is less the patch than the *method*: differential testing between a runtime interpreter and a static checker for the same specification is how ambiguities in that specification become visible while it is still a draft.
+PR #122 is representative. The `Attrs[T]` combinator is meant to read a class's *attributes*, but the evaluator reached them through a path that first walked the class's *methods*, forcing each method's PEP 649 `__annotate__` to run before `Attrs` had filtered anything out. That is invisible until a method's annotation names something only the static reader can see: give a method a parameter typed by a class defined under `if TYPE_CHECKING` and the annotation has no runtime value, so evaluating it raises — and `Attrs[Model]` fails even though the only thing asked of it, the field `name: str`, is perfectly evaluable. The fix threads an `attrs_only` flag down to the definition-gathering step, so the attribute path never visits a method annotation at all. The defect sits exactly where two of this thesis's threads cross: `Attrs` is the very combinator the Pydantic `model_dump` case study is built on (§*Beyond SQL*), and the trigger is the static/runtime split of an annotation under `TYPE_CHECKING` (§*Two meanings of an annotation*) — which is why holding one specification to both tracks surfaced it, the static fork reading the annotation lazily and never forcing the impossible one while the runtime evaluator did. The value of the contribution is less the patch than the *method*: differential testing between a runtime interpreter and a static checker for the same specification is how ambiguities in that specification become visible while it is still a draft.
 
 ## The check contract
 
-For the two-track discipline to mean anything it must be *enforced*, not merely intended, so the whole of it runs in continuous integration and every claim in this thesis is reproducible from the same commands. Four checks gate the work:
+For the two-track discipline to mean anything it must be *enforced*, not merely intended, so the whole of it runs in continuous integration and every claim in this thesis is reproducible from the same commands. Four checks gate the work — the first three on every push, the fourth in a dedicated job that stands up a real database:
 
 - **`ruff`** lints the source, and — because the code examples in this document are real Python — a small script extracts every fenced Python block from the thesis and runs `ruff format --check` over it, so a snippet that does not parse and format cannot be committed. The examples the reader sees are the examples the formatter accepts.
 - **The forked `mypy`**, run with `--warn-unused-ignores` and `--enable-error-code ignore-without-code`, is the static track. The two flags are what turn a suppression comment into a *checked negative assertion*: every `# type: ignore[code]` must name its code, and must still be *used* — the day a negative case silently starts type-checking, the ignore becomes unused and the run turns red. A missing diagnostic is therefore as loud as a wrong one.
 - **`pytest`** is the runtime track, evaluating the same aliases through `typemap` and introspecting the resulting classes; `xfail(strict=True)` marks known static/runtime divergences so they, too, flip to failures the moment they are closed.
-- **The oracle harness** renders and executes the subset against a real PostgreSQL and compares, as the evaluation chapter reports.
+- **The oracle harness** renders and executes the subset against a real PostgreSQL and compares, as the evaluation chapter reports. Because it needs a live server it runs in its own CI job, which stands up PostgreSQL 17 in a container with testcontainers and fails the build unless every case matches — kept separate from the fast, database-free default run (`pytest -m "not postgres"`) but part of the same green build, and reproducible locally by the single command given in §*Evaluation against PostgreSQL as the oracle*.
 
 Nothing here relies on a human remembering to re-run a check or eyeballing a diagnostic. That is the point: a green build is a machine-verified statement that both evaluators agree, that every negative case still fails, and — for the subset — that the database agrees too.
 
@@ -942,6 +942,15 @@ alias (\texttt{id AS user\_id}) & \texttt{\{user\_id:int\}} & exact\\
 \end{tabular}
 \end{table}
 
+Reproducing Table I is automated, not a manual chore: the comparison is codified as a `postgres`-marked integration test that a dedicated CI job runs on every push, standing up PostgreSQL 17 in a container (testcontainers) and failing the build unless the harness reports `ALL MATCH`. The fast default CI run stays database-free (`pytest -m "not postgres"`), so the oracle lives in its own job (`pytest -m postgres`, which needs Docker); the identical check also runs locally against any PostgreSQL reachable through the standard `PG*` variables:
+
+```bash
+PGHOST=/tmp/tysql_pg PGPORT=55432 PGUSER=postgres PGDATABASE=postgres \
+    uv run python scripts/pg_oracle_eval.py
+```
+
+The harness prints one line per query class — each tagged `OK` when tysql's inferred record equals the columns PostgreSQL reports — and ends in `ALL MATCH` once the whole of **S** agrees, which is the state Table I records; it then prints the past-the-edge probes discussed next. The run is deterministic against a fixed server version (PostgreSQL 17 here), so it reproduces the same verdict.
+
 The more informative result is where **S** ends. The same harness then probes the oracle with raw SQL just past each edge — queries PostgreSQL accepts but tysql cannot express — and the ground truth it reports places every failure on a precision ladder (Fig. 9):
 
 - **Degraded — right Python type, lost precision.** `Count` is typed `int`, but PostgreSQL returns `count(...)` as `bigint` (`int8`); the Python-level type is right and a driver hands back an `int`, but the exact SQL type is coarsened. The same coarsening would hide the *nullability* of `SUM`/`AVG` even if those were added.
@@ -1017,7 +1026,9 @@ The route there retraces the layers of Python's type system, each of which the w
 
 The limitations are the walls above, and the ergonomic cost of writing columns as `Col[User, Literal["id"]]` rather than `User.id`. The next steps follow from the evaluation: closing the unsound `Eq` with an operand-compatibility check; extending the reference checker so `OR`-trees and outer-join nullability become expressible; and proposing upstream that boolean special forms make `__bool__` raise in a context-free evaluation rather than silently return `False`, so that naive introspection of a conditional type fails loudly instead of caching the wrong branch (§*The iceberg*). The barrier to *seeing* what is now possible is already lowered: tysql is published on PyPI [30], developed in the open [31], and its online playground at <https://tysql.vercel.app> [32] lets the examples in this thesis be tried in a browser, with no local install. The larger aim is unchanged: to give the community concrete evidence, from a real domain checked against a real database, that Python's long-hidden type-level computation can be turned into a designed, portable surface — and thereby to improve PEP 827's chances of acceptance.
 
-# Appendix {.unnumbered}
+\appendix
+
+# Appendix
 
 ## Beyond SQL: a precise `model_dump()` for Pydantic
 
