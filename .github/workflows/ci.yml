@@ -45,3 +45,29 @@ jobs:
         run: uv run mypy --warn-unused-ignores --show-error-codes --enable-error-code ignore-without-code .
       - name: pytest
         run: uv run pytest -v
+
+  thesis-pdf:
+    # Smoke test: the thesis and annotation still compile to PDF. Times New
+    # Roman is not installable on the runner, so the scripts fall back to
+    # Tinos (fonts-croscore) — pagination may differ slightly from the
+    # submission PDFs, which are built locally and committed.
+    name: thesis pdf (pandoc + xelatex)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: install pandoc + texlive
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pandoc texlive-xetex texlive-latex-extra \
+            texlive-fonts-recommended texlive-lang-cyrillic fonts-croscore
+      - name: build thesis PDF
+        run: ./scripts/build_thesis_pdf.sh ci-thesis.pdf ci-thesis-final.pdf
+      - name: build annotation PDF
+        run: ./scripts/build_annotation_pdf.sh ci-annotation.pdf ci-annotation-final.pdf
+      - name: upload built PDFs
+        uses: actions/upload-artifact@v4
+        with:
+          name: thesis-pdfs
+          path: ci-*.pdf
+          retention-days: 7
