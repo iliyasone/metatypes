@@ -55,12 +55,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: install pandoc + texlive
+      - name: install pandoc (pinned to the local build's version)
+        run: |
+          wget -q https://github.com/jgm/pandoc/releases/download/3.9.0.2/pandoc-3.9.0.2-1-amd64.deb
+          sudo dpkg -i pandoc-3.9.0.2-1-amd64.deb
+      - name: install texlive
+        # texlive-latex-recommended: fontspec, unicode-math, pdfpages,
+        #   polyglossia, extsizes; texlive-latex-extra: upquote, xurl;
+        #   texlive-pictures: tikz; lmodern/fonts-lmodern: Latin Modern
+        #   (pandoc template default); fonts-croscore: Tinos fallback font;
+        #   texlive-lang-cyrillic: Russian hyphenation for the annotation.
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            pandoc texlive-xetex texlive-latex-extra \
-            texlive-fonts-recommended texlive-lang-cyrillic fonts-croscore
+            texlive-xetex texlive-latex-recommended texlive-latex-extra \
+            texlive-pictures texlive-fonts-recommended texlive-plain-generic \
+            texlive-lang-cyrillic lmodern fonts-lmodern fonts-croscore
       - name: build thesis PDF
         run: ./scripts/build_thesis_pdf.sh ci-thesis.pdf ci-thesis-final.pdf
       - name: build annotation PDF
